@@ -33,6 +33,10 @@ namespace SKAIChips_Verification_Tool
             clbSheets = new CheckedListBox();
             btnLoadSelectedSheets = new Button();
             tvRegs = new TreeView();
+            btnSaveScript = new Button();
+            btnLoadScript = new Button();
+            lblScriptFileName = new Label();
+            btnOpenScriptPath = new Button();
             dgvBits = new DataGridView();
             comboProject = new ComboBox();
             labelProject = new Label();
@@ -128,9 +132,9 @@ namespace SKAIChips_Verification_Tool
             // 
             // btnRead
             // 
-            btnRead.Location = new Point(163, 165);
+            btnRead.Location = new Point(171, 165);
             btnRead.Name = "btnRead";
-            btnRead.Size = new Size(73, 23);
+            btnRead.Size = new Size(77, 23);
             btnRead.TabIndex = 9;
             btnRead.Text = "Read";
             btnRead.UseVisualStyleBackColor = true;
@@ -174,12 +178,50 @@ namespace SKAIChips_Verification_Tool
             // 
             // tvRegs
             // 
-            tvRegs.Dock = DockStyle.Fill;
             tvRegs.Location = new Point(3, 19);
             tvRegs.Name = "tvRegs";
-            tvRegs.Size = new Size(441, 480);
+            tvRegs.Size = new Size(441, 442);
             tvRegs.TabIndex = 22;
             tvRegs.AfterSelect += tvRegs_AfterSelect;
+            // 
+            // btnSaveScript
+            // 
+            btnSaveScript.Location = new Point(3, 467);
+            btnSaveScript.Name = "btnSaveScript";
+            btnSaveScript.Size = new Size(90, 23);
+            btnSaveScript.TabIndex = 23;
+            btnSaveScript.Text = "Save Script";
+            btnSaveScript.UseVisualStyleBackColor = true;
+            btnSaveScript.Click += btnSaveScript_Click;
+            // 
+            // btnLoadScript
+            // 
+            btnLoadScript.Location = new Point(99, 467);
+            btnLoadScript.Name = "btnLoadScript";
+            btnLoadScript.Size = new Size(90, 23);
+            btnLoadScript.TabIndex = 24;
+            btnLoadScript.Text = "Load Script";
+            btnLoadScript.UseVisualStyleBackColor = true;
+            btnLoadScript.Click += btnLoadScript_Click;
+            // 
+            // lblScriptFileName
+            // 
+            lblScriptFileName.AutoSize = false;
+            lblScriptFileName.Location = new Point(195, 471);
+            lblScriptFileName.Name = "lblScriptFileName";
+            lblScriptFileName.Size = new Size(180, 15);
+            lblScriptFileName.TabIndex = 25;
+            lblScriptFileName.Text = "(No script file)";
+            // 
+            // btnOpenScriptPath
+            // 
+            btnOpenScriptPath.Location = new Point(381, 467);
+            btnOpenScriptPath.Name = "btnOpenScriptPath";
+            btnOpenScriptPath.Size = new Size(63, 23);
+            btnOpenScriptPath.TabIndex = 26;
+            btnOpenScriptPath.Text = "Path";
+            btnOpenScriptPath.UseVisualStyleBackColor = true;
+            btnOpenScriptPath.Click += btnOpenScriptPath_Click;
             // 
             // dgvBits
             // 
@@ -227,7 +269,7 @@ namespace SKAIChips_Verification_Tool
             btnFtdiSetup.Name = "btnFtdiSetup";
             btnFtdiSetup.Size = new Size(98, 23);
             btnFtdiSetup.TabIndex = 7;
-            btnFtdiSetup.Text = "FTDI Setup";
+            btnFtdiSetup.Text = "Device Setup";
             btnFtdiSetup.UseVisualStyleBackColor = true;
             btnFtdiSetup.Click += btnFtdiSetup_Click;
             // 
@@ -273,9 +315,9 @@ namespace SKAIChips_Verification_Tool
             labelFtdi.AutoSize = true;
             labelFtdi.Location = new Point(6, 75);
             labelFtdi.Name = "labelFtdi";
-            labelFtdi.Size = new Size(31, 15);
+            labelFtdi.Size = new Size(43, 15);
             labelFtdi.TabIndex = 5;
-            labelFtdi.Text = "FTDI";
+            labelFtdi.Text = "Device";
             // 
             // lblFtdiInfo
             // 
@@ -408,7 +450,7 @@ namespace SKAIChips_Verification_Tool
             // 
             btnWrite.Location = new Point(5, 165);
             btnWrite.Name = "btnWrite";
-            btnWrite.Size = new Size(73, 23);
+            btnWrite.Size = new Size(77, 23);
             btnWrite.TabIndex = 5;
             btnWrite.Text = "Write";
             btnWrite.UseVisualStyleBackColor = true;
@@ -416,18 +458,18 @@ namespace SKAIChips_Verification_Tool
             // 
             // btnWriteAll
             // 
-            btnWriteAll.Location = new Point(84, 165);
+            btnWriteAll.Location = new Point(88, 165);
             btnWriteAll.Name = "btnWriteAll";
-            btnWriteAll.Size = new Size(73, 23);
+            btnWriteAll.Size = new Size(77, 23);
             btnWriteAll.TabIndex = 6;
             btnWriteAll.Text = "Write All";
             btnWriteAll.UseVisualStyleBackColor = true;
             // 
             // btnReadAll
             // 
-            btnReadAll.Location = new Point(242, 165);
+            btnReadAll.Location = new Point(254, 165);
             btnReadAll.Name = "btnReadAll";
-            btnReadAll.Size = new Size(73, 23);
+            btnReadAll.Size = new Size(77, 23);
             btnReadAll.TabIndex = 8;
             btnReadAll.Text = "Read All";
             btnReadAll.UseVisualStyleBackColor = true;
@@ -456,10 +498,14 @@ namespace SKAIChips_Verification_Tool
             // 
             // groupRegTree
             // 
+            groupRegTree.Controls.Add(btnOpenScriptPath);
+            groupRegTree.Controls.Add(lblScriptFileName);
+            groupRegTree.Controls.Add(btnLoadScript);
+            groupRegTree.Controls.Add(btnSaveScript);
             groupRegTree.Controls.Add(tvRegs);
             groupRegTree.Location = new Point(5, 4);
             groupRegTree.Name = "groupRegTree";
-            groupRegTree.Size = new Size(447, 502);
+            groupRegTree.Size = new Size(447, 496);
             groupRegTree.TabIndex = 40;
             groupRegTree.TabStop = false;
             groupRegTree.Text = "Register Tree";
@@ -507,6 +553,10 @@ namespace SKAIChips_Verification_Tool
         private CheckedListBox clbSheets;
         private Button btnLoadSelectedSheets;
         private TreeView tvRegs;
+        private Button btnSaveScript;
+        private Button btnLoadScript;
+        private Label lblScriptFileName;
+        private Button btnOpenScriptPath;
         private DataGridView dgvBits;
         private ComboBox comboProject;
         private Label labelProject;
@@ -530,7 +580,6 @@ namespace SKAIChips_Verification_Tool
         private Button btnWrite;
         private Button btnWriteAll;
         private Button btnReadAll;
-
         private Label labelProtocol;
         private Label labelFtdi;
         private Label labelConnection;
