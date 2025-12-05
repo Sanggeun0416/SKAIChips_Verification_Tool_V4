@@ -28,13 +28,17 @@ namespace SKAIChips_Verification_Tool
         private readonly List<RegisterGroup> _groups = new();
         private RegisterGroup _selectedGroup;
         private Register _selectedRegister;
+        private RegisterItem _selectedItem;
         private uint _currentRegValue;
+        private bool _isUpdatingRegValue;
+        private string _scriptFilePath;
 
         private const int I2cTimeoutMs = 200;
 
-        // 32bit 비트 패널용 버튼들 (0~31bit)
         private readonly Button[] _bitButtons = new Button[32];
         private bool _isUpdatingBits;
+
+        private readonly Dictionary<Register, uint> _regValues = new();
 
         public RegisterControlForm()
         {
@@ -46,36 +50,15 @@ namespace SKAIChips_Verification_Tool
         {
             dgvLog.Rows.Clear();
 
-            // Register Description 그리드 초기화
             if (dgvBits != null)
             {
                 dgvBits.AutoGenerateColumns = false;
                 dgvBits.Columns.Clear();
 
-                var colBit = new DataGridViewTextBoxColumn
-                {
-                    Name = "colBit",
-                    HeaderText = "Bit",
-                    ReadOnly = true
-                };
-                var colName = new DataGridViewTextBoxColumn
-                {
-                    Name = "colName",
-                    HeaderText = "Name",
-                    ReadOnly = true
-                };
-                var colDefault = new DataGridViewTextBoxColumn
-                {
-                    Name = "colDefault",
-                    HeaderText = "Default",
-                    ReadOnly = true
-                };
-                var colCurrent = new DataGridViewTextBoxColumn
-                {
-                    Name = "colCurrent",
-                    HeaderText = "Current",
-                    ReadOnly = false
-                };
+                var colBit = new DataGridViewTextBoxColumn { Name = "colBit", HeaderText = "Bit", ReadOnly = true };
+                var colName = new DataGridViewTextBoxColumn { Name = "colName", HeaderText = "Name", ReadOnly = true };
+                var colDefault = new DataGridViewTextBoxColumn { Name = "colDefault", HeaderText = "Default", ReadOnly = true };
+                var colCurrent = new DataGridViewTextBoxColumn { Name = "colCurrent", HeaderText = "Current", ReadOnly = false };
                 var colDesc = new DataGridViewTextBoxColumn
                 {
                     Name = "colDesc",
@@ -91,52 +74,56 @@ namespace SKAIChips_Verification_Tool
                 dgvBits.Columns.Add(colDesc);
             }
 
-            // 레지스터맵 라벨/버튼 초기 상태
             lblMapFileName.Text = "(No file)";
             btnOpenMapPath.Enabled = false;
 
-            // TreeView 우클릭 메뉴
             var ctx = new ContextMenuStrip();
             var mExpand = new ToolStripMenuItem("모두 펼치기");
             var mCollapse = new ToolStripMenuItem("모두 접기");
+            var mSearch = new ToolStripMenuItem("검색...");
 
             mExpand.Click += (s, e) => tvRegs.ExpandAll();
             mCollapse.Click += (s, e) => tvRegs.CollapseAll();
+            mSearch.Click += (s, e) => ShowTreeSearchDialog();
 
             ctx.Items.Add(mExpand);
             ctx.Items.Add(mCollapse);
+            ctx.Items.Add(new ToolStripSeparator());
+            ctx.Items.Add(mSearch);
             tvRegs.ContextMenuStrip = ctx;
 
             InitBitButtons();
             UpdateBitButtonsFromValue(_currentRegValue);
             SetBitButtonsEnabledForItem(null);
 
-            // 패널 크기 바뀔 때마다 버튼 폭 재계산
             flowBitsTop.SizeChanged += (s, e) => UpdateBitButtonLayout();
             flowBitsBottom.SizeChanged += (s, e) => UpdateBitButtonLayout();
-            groupRegCont.Resize += (s, e) => UpdateBitButtonLayout();   // 선택사항이지만 있으면 더 자연스러움
+            groupRegCont.Resize += (s, e) => UpdateBitButtonLayout();
 
-            // Hex 텍스트에서 포커스 빠질 때 값 반영
             txtRegValueHex.Leave += txtRegValueHex_Leave;
 
-            // WriteAll / ReadAll 버튼 핸들러 연결
             btnWriteAll.Click += btnWriteAll_Click;
             btnReadAll.Click += btnReadAll_Click;
 
-            // 프로젝트 로딩 및 상태 갱신
             LoadProjects();
             UpdateStatusText();
 
             btnConnect.Text = "Connect";
 
-            // 초기 표시 상태
             lblRegName.Text = "(No Register)";
-            lblRegAddrSummary.Text = "Addr: -";
-            lblRegResetSummary.Text = "Reset: -";
+            lblRegAddrSummary.Text = "Address: -";
+            lblRegResetSummary.Text = "Reset Value: -";
             txtRegValueHex.Text = "0x00000000";
-        }
 
-        #region 32bit 비트 패널 (버튼 토글)
+            numRegIndex.Minimum = 0;
+            numRegIndex.Maximum = 0;
+            numRegIndex.Value = 0;
+            numRegIndex.Enabled = false;
+            numRegIndex.ValueChanged += numRegIndex_ValueChanged;
+
+            lblScriptFileName.Text = "(No script)";
+            btnOpenScriptPath.Enabled = false;
+        }
 
         private void InitBitButtons()
         {
@@ -149,7 +136,7 @@ namespace SKAIChips_Verification_Tool
                 btn.Margin = new Padding(1);
                 btn.Padding = new Padding(0);
                 btn.Width = 24;
-                btn.Height = 25;          // 초기 값
+                btn.Height = 25;
                 btn.Text = "0";
                 btn.Tag = i;
                 btn.FlatStyle = FlatStyle.Flat;
@@ -165,24 +152,97 @@ namespace SKAIChips_Verification_Tool
             }
 
             UpdateBitButtonsFromValue(_currentRegValue);
-            UpdateBitButtonLayout();   // ← 이 줄 추가
+            UpdateBitButtonLayout();
+        }
+
+        private string PromptText(string title, string label, string defaultValue)
+        {
+            using (var form = new Form())
+            using (var lbl = new Label())
+            using (var txt = new TextBox())
+            using (var btnOk = new Button())
+            using (var btnCancel = new Button())
+            {
+                form.Text = title;
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.MinimizeBox = false;
+                form.MaximizeBox = false;
+                form.ClientSize = new Size(320, 120);
+
+                lbl.AutoSize = true;
+                lbl.Text = label;
+                lbl.Location = new Point(9, 9);
+
+                txt.Size = new Size(300, 23);
+                txt.Location = new Point(9, 30);
+                txt.Text = defaultValue;
+
+                btnOk.Text = "OK";
+                btnOk.DialogResult = DialogResult.OK;
+                btnOk.Location = new Point(152, 70);
+
+                btnCancel.Text = "Cancel";
+                btnCancel.DialogResult = DialogResult.Cancel;
+                btnCancel.Location = new Point(234, 70);
+
+                form.Controls.AddRange(new Control[] { lbl, txt, btnOk, btnCancel });
+                form.AcceptButton = btnOk;
+                form.CancelButton = btnCancel;
+
+                var result = form.ShowDialog(this);
+                if (result == DialogResult.OK)
+                    return txt.Text;
+
+                return null;
+            }
+        }
+
+        private void ShowTreeSearchDialog()
+        {
+            string text = PromptText("Register 검색", "검색할 텍스트를 입력하세요:", "");
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            var node = FindTreeNodeContains(tvRegs.Nodes, text);
+            if (node == null)
+            {
+                MessageBox.Show("일치하는 항목이 없습니다.");
+                return;
+            }
+
+            tvRegs.SelectedNode = node;
+            tvRegs.Focus();
+            node.EnsureVisible();
+        }
+
+        private TreeNode FindTreeNodeContains(TreeNodeCollection nodes, string text)
+        {
+            foreach (TreeNode node in nodes)
+            {
+                if (node.Text.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return node;
+
+                var child = FindTreeNodeContains(node.Nodes, text);
+                if (child != null)
+                    return child;
+            }
+            return null;
         }
 
         private void UpdateBitButtonLayout()
         {
             int cols = 16;
 
-            // 상단 패널
             if (flowBitsTop.ClientSize.Width > 0)
             {
                 int panelWidth = flowBitsTop.ClientSize.Width;
 
-                // 좌우 여백/마진을 조금 빼고 버튼 폭 계산
                 int btnWidth = (panelWidth - (cols + 1) * 2) / cols;
                 if (btnWidth < 16) btnWidth = 16;
-                if (btnWidth > 40) btnWidth = 40;   // 너무 넓어지는 것 방지
+                if (btnWidth > 40) btnWidth = 40;
 
-                int btnHeight = 25;                 // 높이는 고정
+                int btnHeight = 25;
 
                 for (int i = 0; i < 16; i++)
                 {
@@ -193,7 +253,6 @@ namespace SKAIChips_Verification_Tool
                 }
             }
 
-            // 하단 패널
             if (flowBitsBottom.ClientSize.Width > 0)
             {
                 int panelWidth = flowBitsBottom.ClientSize.Width;
@@ -214,33 +273,6 @@ namespace SKAIChips_Verification_Tool
             }
         }
 
-        private void BitPanels_Resize(object sender, EventArgs e)
-        {
-            // 한 줄에 16개, 좌우 Margin 고려해서 폭 계산
-            int topWidth = Math.Max(20,
-                (flowBitsTop.ClientSize.Width - flowBitsTop.Padding.Horizontal - (16 * 2)) / 16);
-            int bottomWidth = Math.Max(20,
-                (flowBitsBottom.ClientSize.Width - flowBitsBottom.Padding.Horizontal - (16 * 2)) / 16);
-
-            for (int i = 0; i < 16; i++)
-            {
-                if (_bitButtons[i] != null)
-                {
-                    _bitButtons[i].Width = topWidth;
-                    _bitButtons[i].Height = 25; // 사용자가 고정 원함
-                }
-            }
-
-            for (int i = 16; i < 32; i++)
-            {
-                if (_bitButtons[i] != null)
-                {
-                    _bitButtons[i].Width = bottomWidth;
-                    _bitButtons[i].Height = 25;
-                }
-            }
-        }
-
         private void BitButton_Click(object sender, EventArgs e)
         {
             if (_isUpdatingBits)
@@ -249,13 +281,9 @@ namespace SKAIChips_Verification_Tool
             if (sender is not Button btn)
                 return;
 
-            // 0/1 토글
             btn.Text = (btn.Text == "0") ? "1" : "0";
 
-            // 전체 32bit 값 다시 계산
             _currentRegValue = GetValueFromBitButtons();
-
-            // 이 값 기준으로 Hex 텍스트 + Register Description 그리드까지 싹 동기화
             UpdateBitCurrentValues();
         }
 
@@ -263,10 +291,9 @@ namespace SKAIChips_Verification_Tool
         {
             _isUpdatingBits = true;
 
-            // 화면상 왼쪽 버튼이 bit31, 오른쪽이 bit0 이 되도록 매핑
             for (int bit = 0; bit < 32; bit++)
             {
-                int btnIndex = 31 - bit; // bit31 -> index0, bit0 -> index31
+                int btnIndex = 31 - bit;
                 uint mask = 1u << bit;
                 bool isOne = (value & mask) != 0;
 
@@ -282,7 +309,6 @@ namespace SKAIChips_Verification_Tool
         {
             uint value = 0;
 
-            // 화면상 index0(맨 왼쪽)이 bit31, index31(맨 오른쪽)이 bit0
             for (int btnIndex = 0; btnIndex < 32; btnIndex++)
             {
                 var btn = _bitButtons[btnIndex];
@@ -309,10 +335,6 @@ namespace SKAIChips_Verification_Tool
                 txtRegValueHex.Text = $"0x{_currentRegValue:X8}";
             }
         }
-
-        #endregion
-
-        #region 공통 유틸/상태
 
         private void LoadProjects()
         {
@@ -368,7 +390,10 @@ namespace SKAIChips_Verification_Tool
             }
             else
             {
-                lblFtdiInfo.Text = $"DevIdx {_ftdiSettings.DeviceIndex}";
+                if (!string.IsNullOrWhiteSpace(_ftdiSettings.Description))
+                    lblFtdiInfo.Text = _ftdiSettings.Description;
+                else
+                    lblFtdiInfo.Text = $"DevIdx {_ftdiSettings.DeviceIndex}";
             }
 
             bool isConnected = _bus != null && _bus.IsConnected;
@@ -463,36 +488,45 @@ namespace SKAIChips_Verification_Tool
                 return;
             }
 
-            if (_ftdiSettings == null)
-            {
-                MessageBox.Show("FTDI 장비 셋업이 필요합니다.");
-                return;
-            }
+            bool isMockProject = _selectedProject is MockProject;
 
-            if (_protocolSettings == null)
+            if (!isMockProject)
             {
-                MessageBox.Show("프로토콜 셋업이 필요합니다.");
-                return;
-            }
-
-            if (_protocolSettings.ProtocolType == ProtocolType.I2C)
-            {
-                if (!_protocolSettings.I2cSlaveAddress.HasValue)
+                if (_ftdiSettings == null)
                 {
-                    MessageBox.Show("I2C Slave Address가 설정되지 않았습니다.");
+                    MessageBox.Show("FTDI 장비 셋업이 필요합니다.");
                     return;
                 }
 
-                uint devIndex = (uint)_ftdiSettings.DeviceIndex;
-                ushort slaveAddr = (ushort)_protocolSettings.I2cSlaveAddress.Value;
-                ushort speedKbps = (ushort)_protocolSettings.SpeedKbps;
+                if (_protocolSettings == null)
+                {
+                    MessageBox.Show("프로토콜 셋업이 필요합니다.");
+                    return;
+                }
 
-                _bus = new Ft4222I2cBus(devIndex, slaveAddr, speedKbps);
+                if (_protocolSettings.ProtocolType == ProtocolType.I2C)
+                {
+                    if (!_protocolSettings.I2cSlaveAddress.HasValue)
+                    {
+                        MessageBox.Show("I2C Slave Address가 설정되지 않았습니다.");
+                        return;
+                    }
+
+                    uint devIndex = (uint)_ftdiSettings.DeviceIndex;
+                    ushort slaveAddr = (ushort)_protocolSettings.I2cSlaveAddress.Value;
+                    ushort speedKbps = (ushort)_protocolSettings.SpeedKbps;
+
+                    _bus = new Ft4222I2cBus(devIndex, slaveAddr, speedKbps);
+                }
+                else
+                {
+                    MessageBox.Show("해당 프로토콜은 아직 구현되지 않았습니다.");
+                    return;
+                }
             }
             else
             {
-                MessageBox.Show("해당 프로토콜은 아직 구현되지 않았습니다.");
-                return;
+                _bus = new MockBus();
             }
 
             try
@@ -500,7 +534,7 @@ namespace SKAIChips_Verification_Tool
                 if (!_bus.Connect())
                 {
                     _bus = null;
-                    MessageBox.Show("FTDI 연결 실패");
+                    MessageBox.Show(isMockProject ? "Mock 연결 실패" : "FTDI 연결 실패");
                     UpdateStatusText();
                     return;
                 }
@@ -516,10 +550,6 @@ namespace SKAIChips_Verification_Tool
                 MessageBox.Show("연결 중 오류: " + ex.Message);
             }
         }
-
-        #endregion
-
-        #region 버튼 핸들러 (Connect/Read/Write/WriteAll/ReadAll)
 
         private void btnConnect_Click(object sender, EventArgs e)
         {
@@ -560,7 +590,7 @@ namespace SKAIChips_Verification_Tool
 
                 AddLog("READ", $"0x{addr:X8}", $"0x{data:X8}", "OK");
 
-                UpdateBitCurrentValues(); // Register Description + Hex + 패널 동기화
+                UpdateBitCurrentValues();
             }
             catch (Exception ex)
             {
@@ -586,7 +616,6 @@ namespace SKAIChips_Verification_Tool
             uint addr = _selectedRegister.Address;
             uint newValue;
 
-            // 1) 비트필드 한 줄 선택 → 해당 필드만 수정
             if (dgvBits.SelectedRows.Count > 0 && dgvBits.SelectedRows[0].Tag is RegisterItem selItem)
             {
                 var row = dgvBits.SelectedRows[0];
@@ -605,7 +634,6 @@ namespace SKAIChips_Verification_Tool
                 newValue &= ~mask;
                 newValue |= (fieldVal << selItem.LowerBit);
             }
-            // 2) 비트 선택 없음 + dgvBits 내용 있으면 → 전체 재조합
             else if (_selectedRegister != null && dgvBits.Rows.Count > 0)
             {
                 uint baseValue = _currentRegValue;
@@ -630,7 +658,6 @@ namespace SKAIChips_Verification_Tool
                     newValue |= (fieldVal << item.LowerBit);
                 }
             }
-            // 3) 비트필드도 안 쓰면 → 32bit Hex 텍스트 사용
             else
             {
                 if (!TryParseHexUInt(txtRegValueHex.Text, out newValue))
@@ -672,37 +699,47 @@ namespace SKAIChips_Verification_Tool
                 return;
             }
 
-            if (_selectedGroup == null)
+            if (_groups == null || _groups.Count == 0)
             {
-                MessageBox.Show("Tree에서 그룹(시트)을 선택하세요.");
+                MessageBox.Show("먼저 Register Tree를 로드하세요.");
                 return;
             }
 
-            foreach (var reg in _selectedGroup.Registers)
+            foreach (var group in _groups)
             {
-                uint addr = reg.Address;
-                uint data = reg.ResetValue;
-
-                try
+                foreach (var reg in group.Registers)
                 {
-                    bool success = await RunWithTimeout(() =>
-                    {
-                        _chip.WriteRegister(addr, data);
-                    }, I2cTimeoutMs);
+                    uint addr = reg.Address;
+                    uint data = GetRegisterValue(reg);
 
-                    if (!success)
+                    try
                     {
-                        AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "TIMEOUT");
-                        continue;
+                        bool success = await RunWithTimeout(() =>
+                        {
+                            _chip.WriteRegister(addr, data);
+                        }, I2cTimeoutMs);
+
+                        if (!success)
+                        {
+                            AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "TIMEOUT");
+                            continue;
+                        }
+
+                        _regValues[reg] = data;
+                        AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "OK");
                     }
+                    catch (Exception ex)
+                    {
+                        AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "ERR");
+                        Debug.WriteLine(ex);
+                    }
+                }
+            }
 
-                    AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "OK");
-                }
-                catch (Exception ex)
-                {
-                    AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "ERR");
-                    Debug.WriteLine(ex);
-                }
+            if (_selectedRegister != null)
+            {
+                _currentRegValue = GetRegisterValue(_selectedRegister);
+                UpdateBitCurrentValues();
             }
         }
 
@@ -714,40 +751,46 @@ namespace SKAIChips_Verification_Tool
                 return;
             }
 
-            if (_selectedGroup == null)
+            if (_groups == null || _groups.Count == 0)
             {
-                MessageBox.Show("Tree에서 그룹(시트)을 선택하세요.");
+                MessageBox.Show("먼저 Register Tree를 로드하세요.");
                 return;
             }
 
-            foreach (var reg in _selectedGroup.Registers)
+            foreach (var group in _groups)
             {
-                uint addr = reg.Address;
-
-                try
+                foreach (var reg in group.Registers)
                 {
-                    var result = await RunWithTimeout(() => _chip.ReadRegister(addr), I2cTimeoutMs);
+                    uint addr = reg.Address;
 
-                    if (!result.success)
+                    try
                     {
-                        AddLog("READ_ALL", $"0x{addr:X8}", "", "TIMEOUT");
-                        continue;
-                    }
+                        var result = await RunWithTimeout(() => _chip.ReadRegister(addr), I2cTimeoutMs);
 
-                    uint data = result.result;
-                    AddLog("READ_ALL", $"0x{addr:X8}", $"0x{data:X8}", "OK");
-                }
-                catch (Exception ex)
-                {
-                    AddLog("READ_ALL", $"0x{addr:X8}", "", "ERR");
-                    Debug.WriteLine(ex);
+                        if (!result.success)
+                        {
+                            AddLog("READ_ALL", $"0x{addr:X8}", "", "TIMEOUT");
+                            continue;
+                        }
+
+                        uint data = result.result;
+                        _regValues[reg] = data;
+                        AddLog("READ_ALL", $"0x{addr:X8}", $"0x{data:X8}", "OK");
+                    }
+                    catch (Exception ex)
+                    {
+                        AddLog("READ_ALL", $"0x{addr:X8}", "", "ERR");
+                        Debug.WriteLine(ex);
+                    }
                 }
             }
+
+            if (_selectedRegister != null)
+            {
+                _currentRegValue = GetRegisterValue(_selectedRegister);
+                UpdateBitCurrentValues();
+            }
         }
-
-        #endregion
-
-        #region 레지스터맵 로딩 / TreeView
 
         private void btnSelectMapFile_Click(object sender, EventArgs e)
         {
@@ -773,6 +816,7 @@ namespace SKAIChips_Verification_Tool
                     }
 
                     _groups.Clear();
+                    _regValues.Clear();
                     tvRegs.Nodes.Clear();
                     dgvBits.Rows.Clear();
                 }
@@ -803,6 +847,7 @@ namespace SKAIChips_Verification_Tool
             try
             {
                 _groups.Clear();
+                _regValues.Clear();
 
                 using (var wb = new XLWorkbook(_regMapFilePath))
                 {
@@ -894,23 +939,38 @@ namespace SKAIChips_Verification_Tool
             tvRegs.EndUpdate();
         }
 
+        private uint GetRegisterValue(Register reg)
+        {
+            if (reg == null)
+                return 0;
+
+            if (_regValues.TryGetValue(reg, out var v))
+                return v;
+
+            v = reg.ResetValue;
+            _regValues[reg] = v;
+            return v;
+        }
+
         private void tvRegs_AfterSelect(object sender, TreeViewEventArgs e)
         {
             _selectedGroup = null;
             _selectedRegister = null;
+            _selectedItem = null;
 
             if (e.Node?.Tag is RegisterGroup g)
             {
                 _selectedGroup = g;
+
                 dgvBits.Rows.Clear();
                 lblRegName.Text = "(Group Selected)";
-                lblRegAddrSummary.Text = "Addr: -";
-                lblRegResetSummary.Text = "Reset: -";
+                lblRegAddrSummary.Text = "Address: -";
+                lblRegResetSummary.Text = "Reset Value: -";
                 _currentRegValue = 0;
                 UpdateBitCurrentValues();
 
-                // 그룹 선택 시: 모든 비트 활성화
                 SetBitButtonsEnabledForItem(null);
+                UpdateNumRegIndexForSelectedItem();
                 return;
             }
 
@@ -920,16 +980,11 @@ namespace SKAIChips_Verification_Tool
                     _selectedGroup = pg;
 
                 _selectedRegister = reg;
-                lblRegName.Text = reg.Name;
-                lblRegAddrSummary.Text = $"Addr: 0x{reg.Address:X8}";
-                lblRegResetSummary.Text = $"Reset: 0x{reg.ResetValue:X8}";
+                _selectedItem = null;
 
-                if (_selectedGroup != null)
-                {
-                    int idx = _selectedGroup.Registers.IndexOf(reg);
-                    if (idx >= 0 && idx <= (int)numRegIndex.Maximum)
-                        numRegIndex.Value = idx;
-                }
+                lblRegName.Text = reg.Name;
+                lblRegAddrSummary.Text = $"Address: 0x{reg.Address:X8}";
+                lblRegResetSummary.Text = $"Reset Value: 0x{reg.ResetValue:X8}";
 
                 dgvBits.Rows.Clear();
 
@@ -951,11 +1006,11 @@ namespace SKAIChips_Verification_Tool
                     row.Tag = item;
                 }
 
-                _currentRegValue = reg.ResetValue;
+                _currentRegValue = GetRegisterValue(reg);
                 UpdateBitCurrentValues();
 
-                // 레지스터만 선택된 상태에서는 32비트 전체 활성
                 SetBitButtonsEnabledForItem(null);
+                UpdateNumRegIndexForSelectedItem();
             }
             else if (e.Node?.Tag is RegisterItem item)
             {
@@ -965,16 +1020,11 @@ namespace SKAIChips_Verification_Tool
                         _selectedGroup = pg;
 
                     _selectedRegister = parentReg;
-                    lblRegName.Text = parentReg.Name;
-                    lblRegAddrSummary.Text = $"Addr: 0x{parentReg.Address:X8}";
-                    lblRegResetSummary.Text = $"Reset: 0x{parentReg.ResetValue:X8}";
+                    _selectedItem = item;
 
-                    if (_selectedGroup != null)
-                    {
-                        int idx = _selectedGroup.Registers.IndexOf(parentReg);
-                        if (idx >= 0 && idx <= (int)numRegIndex.Maximum)
-                            numRegIndex.Value = idx;
-                    }
+                    lblRegName.Text = parentReg.Name;
+                    lblRegAddrSummary.Text = $"Address: 0x{parentReg.Address:X8}";
+                    lblRegResetSummary.Text = $"Reset Value: 0x{parentReg.ResetValue:X8}";
 
                     dgvBits.Rows.Clear();
 
@@ -999,24 +1049,28 @@ namespace SKAIChips_Verification_Tool
                             row.Selected = true;
                     }
 
-                    _currentRegValue = parentReg.ResetValue;
+                    _currentRegValue = GetRegisterValue(parentReg);
                     UpdateBitCurrentValues();
 
-                    // 여기서 선택된 필드 범위만 버튼 활성화
                     SetBitButtonsEnabledForItem(item);
+                    UpdateNumRegIndexForSelectedItem();
                 }
             }
             else
             {
+                _selectedGroup = null;
+                _selectedRegister = null;
+                _selectedItem = null;
+
                 dgvBits.Rows.Clear();
                 lblRegName.Text = "(No Register)";
-                lblRegAddrSummary.Text = "Addr: -";
-                lblRegResetSummary.Text = "Reset: -";
+                lblRegAddrSummary.Text = "Address: -";
+                lblRegResetSummary.Text = "Reset Value: -";
                 _currentRegValue = 0;
                 UpdateBitCurrentValues();
 
-                // 아무것도 선택 안 된 상태 → 전체 활성
                 SetBitButtonsEnabledForItem(null);
+                UpdateNumRegIndexForSelectedItem();
             }
         }
 
@@ -1025,7 +1079,6 @@ namespace SKAIChips_Verification_Tool
             if (_bitButtons == null)
                 return;
 
-            // 선택된 비트/필드가 없는 경우 → 전부 활성화
             if (item == null)
             {
                 for (int i = 0; i < _bitButtons.Length; i++)
@@ -1037,10 +1090,9 @@ namespace SKAIChips_Verification_Tool
                 return;
             }
 
-            // item.LowerBit ~ item.UpperBit 범위만 활성화
             for (int bit = 0; bit < 32; bit++)
             {
-                int btnIndex = 31 - bit;          // 화면 왼쪽이 bit31, 오른쪽이 bit0
+                int btnIndex = 31 - bit;
                 var btn = _bitButtons[btnIndex];
                 if (btn == null) continue;
 
@@ -1051,7 +1103,6 @@ namespace SKAIChips_Verification_Tool
 
         private void UpdateBitCurrentValues()
         {
-            // 1) Register Description 그리드의 colCurrent 갱신
             for (int i = 0; i < dgvBits.Rows.Count; i++)
             {
                 var row = dgvBits.Rows[i];
@@ -1065,16 +1116,222 @@ namespace SKAIChips_Verification_Tool
                 row.Cells["colCurrent"].Value = $"0x{fieldVal:X}";
             }
 
-            // 2) 32bit Hex 텍스트 갱신
             txtRegValueHex.Text = $"0x{_currentRegValue:X8}";
 
-            // 3) 32bit 버튼 패널 갱신
+            if (_selectedRegister != null)
+                _regValues[_selectedRegister] = _currentRegValue;
+
             UpdateBitButtonsFromValue(_currentRegValue);
+
+            UpdateNumRegIndexForSelectedItem();
         }
 
-        #endregion
+        private void UpdateNumRegIndexForSelectedItem()
+        {
+            _isUpdatingRegValue = true;
+            try
+            {
+                if (_selectedItem == null)
+                {
+                    numRegIndex.Enabled = false;
+                    numRegIndex.Minimum = 0;
+                    numRegIndex.Maximum = 0;
+                    numRegIndex.Value = 0;
+                    return;
+                }
 
-        #region 프로젝트/프로토콜/FTDI 설정
+                int width = _selectedItem.UpperBit - _selectedItem.LowerBit + 1;
+                uint mask = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
+                uint fieldVal = (_currentRegValue >> _selectedItem.LowerBit) & mask;
+
+                numRegIndex.Minimum = 0;
+                numRegIndex.Maximum = mask;
+                numRegIndex.Enabled = true;
+
+                if (fieldVal <= mask)
+                    numRegIndex.Value = fieldVal;
+                else
+                    numRegIndex.Value = mask;
+            }
+            finally
+            {
+                _isUpdatingRegValue = false;
+            }
+        }
+
+        private void numRegIndex_ValueChanged(object sender, EventArgs e)
+        {
+            if (_isUpdatingRegValue)
+                return;
+
+            if (_selectedItem == null)
+                return;
+
+            uint fieldVal = (uint)numRegIndex.Value;
+
+            int width = _selectedItem.UpperBit - _selectedItem.LowerBit + 1;
+            uint mask = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
+
+            if (fieldVal > mask)
+                fieldVal = mask;
+
+            uint regVal = _currentRegValue;
+            uint fieldMask = mask << _selectedItem.LowerBit;
+
+            regVal &= ~fieldMask;
+            regVal |= (fieldVal << _selectedItem.LowerBit);
+
+            _currentRegValue = regVal;
+            UpdateBitCurrentValues();
+        }
+
+        private void SaveRegisterScriptLegacy(string path)
+        {
+            using (var sw = new StreamWriter(path))
+            {
+                foreach (var group in _groups)
+                {
+                    sw.WriteLine(group.Name);
+
+                    foreach (var reg in group.Registers)
+                    {
+                        uint value = GetRegisterValue(reg);
+
+                        sw.WriteLine($"\t{reg.Address:X8}\t{value:X8}\t{reg.Name}");
+
+                        foreach (var item in reg.Items)
+                        {
+                            int width = item.UpperBit - item.LowerBit + 1;
+                            uint mask = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
+                            uint fieldVal = (value >> item.LowerBit) & mask;
+
+                            string bitText = $"[{item.UpperBit}:{item.LowerBit}]";
+
+                            sw.WriteLine($"\t\t{bitText}{item.Name}\t{fieldVal}");
+                        }
+                    }
+                }
+            }
+        }
+
+        private void LoadRegisterScriptLegacy(string path)
+        {
+            var addrToReg = new Dictionary<uint, Register>();
+            foreach (var g in _groups)
+            {
+                foreach (var reg in g.Registers)
+                    addrToReg[reg.Address] = reg;
+            }
+
+            foreach (var raw in File.ReadLines(path))
+            {
+                if (string.IsNullOrWhiteSpace(raw))
+                    continue;
+
+                string line = raw.Trim();
+
+                if (line.StartsWith("["))
+                    continue;
+
+                var parts = line.Split(
+                    new[] { '\t', ' ' },
+                    StringSplitOptions.RemoveEmptyEntries);
+
+                if (parts.Length >= 2 &&
+                    TryParseHexUInt(parts[0], out uint addr) &&
+                    TryParseHexUInt(parts[1], out uint value))
+                {
+                    if (addrToReg.TryGetValue(addr, out var reg))
+                    {
+                        _regValues[reg] = value;
+                    }
+
+                    continue;
+                }
+            }
+
+            if (_selectedRegister != null)
+            {
+                _currentRegValue = GetRegisterValue(_selectedRegister);
+                UpdateBitCurrentValues();
+            }
+        }
+
+        private void btnSaveScript_Click(object sender, EventArgs e)
+        {
+            using (var sfd = new SaveFileDialog())
+            {
+                sfd.Filter = "Register Script|*.txt|All Files|*.*";
+
+                if (!string.IsNullOrEmpty(_scriptFilePath))
+                {
+                    sfd.InitialDirectory = Path.GetDirectoryName(_scriptFilePath);
+                    sfd.FileName = Path.GetFileName(_scriptFilePath);
+                }
+
+                if (sfd.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                SaveRegisterScriptLegacy(sfd.FileName);
+
+                SetScriptFilePath(sfd.FileName);
+            }
+        }
+
+        private void btnLoadScript_Click(object sender, EventArgs e)
+        {
+            using (var ofd = new OpenFileDialog())
+            {
+                ofd.Filter = "Register Script|*.txt|All Files|*.*";
+
+                if (!string.IsNullOrEmpty(_scriptFilePath))
+                {
+                    ofd.InitialDirectory = Path.GetDirectoryName(_scriptFilePath);
+                    ofd.FileName = Path.GetFileName(_scriptFilePath);
+                }
+
+                if (ofd.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                LoadRegisterScriptLegacy(ofd.FileName);
+
+                SetScriptFilePath(ofd.FileName);
+
+                if (_selectedRegister != null)
+                {
+                    _currentRegValue = GetRegisterValue(_selectedRegister);
+                    UpdateBitCurrentValues();
+                }
+            }
+        }
+
+        private void SetScriptFilePath(string path)
+        {
+            _scriptFilePath = path;
+
+            if (string.IsNullOrEmpty(path))
+            {
+                lblScriptFileName.Text = "(No script)";
+                btnOpenScriptPath.Enabled = false;
+            }
+            else
+            {
+                lblScriptFileName.Text = Path.GetFileName(path);
+                btnOpenScriptPath.Enabled = true;
+            }
+        }
+
+        private void btnOpenScriptPath_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(_scriptFilePath) || !File.Exists(_scriptFilePath))
+            {
+                MessageBox.Show("열려 있는 스크립트 파일이 없습니다.");
+                return;
+            }
+
+            var arg = $"/select,\"{_scriptFilePath}\"";
+            Process.Start("explorer.exe", arg);
+        }
 
         private void comboProject_SelectedIndexChanged(object sender, EventArgs e)
         {
@@ -1123,7 +1380,5 @@ namespace SKAIChips_Verification_Tool
                 }
             }
         }
-
-        #endregion
     }
 }
