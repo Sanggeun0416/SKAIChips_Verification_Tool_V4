@@ -6,6 +6,7 @@ namespace SKAIChips_Verification_Tool
     public partial class MainForm : Form
     {
         private RegisterControlForm _regForm;
+        private InstrumentForm _instrumentForm;   // ¡ç Ãß°¡
 
         public MainForm()
         {
@@ -35,6 +36,26 @@ namespace SKAIChips_Verification_Tool
         private void menuExit_Click(object sender, EventArgs e)
         {
             Close();
+        }
+
+        private void menuSetupInstrument_Click(object sender, EventArgs e)
+        {
+            if (_instrumentForm == null || _instrumentForm.IsDisposed)
+            {
+                _instrumentForm = new InstrumentForm
+                {
+                    StartPosition = FormStartPosition.CenterParent
+                };
+
+                _instrumentForm.Show(this);
+            }
+            else
+            {
+                if (!_instrumentForm.Visible)
+                    _instrumentForm.Show(this);
+
+                _instrumentForm.Activate();
+            }
         }
     }
 }

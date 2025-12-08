@@ -11,6 +11,8 @@ namespace SKAIChips_Verification_Tool
         private ToolStripMenuItem menuExit;
         private ToolStripMenuItem menuTools;
         private ToolStripMenuItem menuRegisterControl;
+        private ToolStripMenuItem menuSetup;
+        private ToolStripMenuItem menuSetupInstrument;
 
         protected override void Dispose(bool disposing)
         {
@@ -26,12 +28,14 @@ namespace SKAIChips_Verification_Tool
             menuExit = new ToolStripMenuItem();
             menuTools = new ToolStripMenuItem();
             menuRegisterControl = new ToolStripMenuItem();
+            menuSetup = new ToolStripMenuItem();
+            menuSetupInstrument = new ToolStripMenuItem();
             menuStrip1.SuspendLayout();
             SuspendLayout();
             // 
             // menuStrip1
             // 
-            menuStrip1.Items.AddRange(new ToolStripItem[] { menuFile, menuTools });
+            menuStrip1.Items.AddRange(new ToolStripItem[] { menuFile, menuTools, menuSetup });
             menuStrip1.Location = new Point(0, 0);
             menuStrip1.Name = "menuStrip1";
             menuStrip1.Size = new Size(1384, 24);
@@ -65,6 +69,20 @@ namespace SKAIChips_Verification_Tool
             menuRegisterControl.Size = new Size(160, 22);
             menuRegisterControl.Text = "Register Control";
             menuRegisterControl.Click += menuRegisterControl_Click;
+            // 
+            // menuSetup
+            // 
+            menuSetup.DropDownItems.AddRange(new ToolStripItem[] { menuSetupInstrument });
+            menuSetup.Name = "menuSetup";
+            menuSetup.Size = new Size(53, 20);
+            menuSetup.Text = "Setup";
+            // 
+            // menuSetupInstrument
+            // 
+            menuSetupInstrument.Name = "menuSetupInstrument";
+            menuSetupInstrument.Size = new Size(134, 22);
+            menuSetupInstrument.Text = "Instrument";
+            menuSetupInstrument.Click += menuSetupInstrument_Click;
             // 
             // MainForm
             // 
