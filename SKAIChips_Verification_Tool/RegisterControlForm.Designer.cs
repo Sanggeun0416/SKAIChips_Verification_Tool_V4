@@ -65,6 +65,13 @@ namespace SKAIChips_Verification_Tool
             groupLog = new GroupBox();
             groupRegDesc = new GroupBox();
             groupRegTree = new GroupBox();
+            groupAutoTask = new GroupBox();
+            lblAutoTaskStatus = new Label();
+            progressAutoTask = new ProgressBar();
+            btnAutoTaskEdit = new Button();
+            btnAutoTaskStop = new Button();
+            btnAutoTaskRun = new Button();
+            comboAutoTask = new ComboBox();
             ((System.ComponentModel.ISupportInitialize)dgvLog).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvBits).BeginInit();
             groupSetup.SuspendLayout();
@@ -74,6 +81,7 @@ namespace SKAIChips_Verification_Tool
             groupLog.SuspendLayout();
             groupRegDesc.SuspendLayout();
             groupRegTree.SuspendLayout();
+            groupAutoTask.SuspendLayout();
             SuspendLayout();
             // 
             // btnConnect
@@ -97,7 +105,7 @@ namespace SKAIChips_Verification_Tool
             dgvLog.Name = "dgvLog";
             dgvLog.ReadOnly = true;
             dgvLog.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvLog.Size = new Size(579, 480);
+            dgvLog.Size = new Size(579, 360);
             dgvLog.TabIndex = 8;
             // 
             // colTime
@@ -206,7 +214,6 @@ namespace SKAIChips_Verification_Tool
             // 
             // lblScriptFileName
             // 
-            lblScriptFileName.AutoSize = false;
             lblScriptFileName.Location = new Point(195, 471);
             lblScriptFileName.Name = "lblScriptFileName";
             lblScriptFileName.Size = new Size(180, 15);
@@ -480,7 +487,7 @@ namespace SKAIChips_Verification_Tool
             groupLog.Controls.Add(dgvLog);
             groupLog.Location = new Point(798, 4);
             groupLog.Name = "groupLog";
-            groupLog.Size = new Size(585, 502);
+            groupLog.Size = new Size(585, 382);
             groupLog.TabIndex = 38;
             groupLog.TabStop = false;
             groupLog.Text = "Register Control Log";
@@ -510,6 +517,75 @@ namespace SKAIChips_Verification_Tool
             groupRegTree.TabStop = false;
             groupRegTree.Text = "Register Tree";
             // 
+            // groupAutoTask
+            // 
+            groupAutoTask.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            groupAutoTask.Controls.Add(lblAutoTaskStatus);
+            groupAutoTask.Controls.Add(progressAutoTask);
+            groupAutoTask.Controls.Add(btnAutoTaskEdit);
+            groupAutoTask.Controls.Add(btnAutoTaskStop);
+            groupAutoTask.Controls.Add(btnAutoTaskRun);
+            groupAutoTask.Controls.Add(comboAutoTask);
+            groupAutoTask.Location = new Point(798, 389);
+            groupAutoTask.Name = "groupAutoTask";
+            groupAutoTask.Size = new Size(585, 117);
+            groupAutoTask.TabIndex = 41;
+            groupAutoTask.TabStop = false;
+            groupAutoTask.Text = "AutoTask Editor";
+            // 
+            // lblAutoTaskStatus
+            // 
+            lblAutoTaskStatus.AutoEllipsis = true;
+            lblAutoTaskStatus.Location = new Point(12, 60);
+            lblAutoTaskStatus.Name = "lblAutoTaskStatus";
+            lblAutoTaskStatus.Size = new Size(558, 15);
+            lblAutoTaskStatus.TabIndex = 4;
+            lblAutoTaskStatus.Text = "Idle";
+            // 
+            // progressAutoTask
+            // 
+            progressAutoTask.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            progressAutoTask.Location = new Point(12, 80);
+            progressAutoTask.Name = "progressAutoTask";
+            progressAutoTask.Size = new Size(558, 23);
+            progressAutoTask.TabIndex = 5;
+            // 
+            // btnAutoTaskEdit
+            // 
+            btnAutoTaskEdit.Location = new Point(460, 22);
+            btnAutoTaskEdit.Name = "btnAutoTaskEdit";
+            btnAutoTaskEdit.Size = new Size(110, 23);
+            btnAutoTaskEdit.TabIndex = 3;
+            btnAutoTaskEdit.Text = "Open Editor...";
+            btnAutoTaskEdit.UseVisualStyleBackColor = true;
+            // 
+            // btnAutoTaskStop
+            // 
+            btnAutoTaskStop.Location = new Point(379, 22);
+            btnAutoTaskStop.Name = "btnAutoTaskStop";
+            btnAutoTaskStop.Size = new Size(75, 23);
+            btnAutoTaskStop.TabIndex = 2;
+            btnAutoTaskStop.Text = "Stop";
+            btnAutoTaskStop.UseVisualStyleBackColor = true;
+            // 
+            // btnAutoTaskRun
+            // 
+            btnAutoTaskRun.Location = new Point(298, 22);
+            btnAutoTaskRun.Name = "btnAutoTaskRun";
+            btnAutoTaskRun.Size = new Size(75, 23);
+            btnAutoTaskRun.TabIndex = 1;
+            btnAutoTaskRun.Text = "Run";
+            btnAutoTaskRun.UseVisualStyleBackColor = true;
+            // 
+            // comboAutoTask
+            // 
+            comboAutoTask.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboAutoTask.FormattingEnabled = true;
+            comboAutoTask.Location = new Point(12, 22);
+            comboAutoTask.Name = "comboAutoTask";
+            comboAutoTask.Size = new Size(280, 23);
+            comboAutoTask.TabIndex = 0;
+            // 
             // RegisterControlForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -517,6 +593,7 @@ namespace SKAIChips_Verification_Tool
             ClientSize = new Size(1384, 841);
             Controls.Add(groupRegTree);
             Controls.Add(groupRegDesc);
+            Controls.Add(groupAutoTask);
             Controls.Add(groupLog);
             Controls.Add(groupRegCont);
             Controls.Add(groupRegMap);
@@ -535,6 +612,7 @@ namespace SKAIChips_Verification_Tool
             groupLog.ResumeLayout(false);
             groupRegDesc.ResumeLayout(false);
             groupRegTree.ResumeLayout(false);
+            groupAutoTask.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -585,5 +663,14 @@ namespace SKAIChips_Verification_Tool
         private Label labelConnection;
         private Label lblProtocolInfo;
         private Label lblFtdiInfo;
+
+        // AutoTask 영역
+        private GroupBox groupAutoTask;
+        private ComboBox comboAutoTask;
+        private Button btnAutoTaskRun;
+        private Button btnAutoTaskStop;
+        private Button btnAutoTaskEdit;
+        private ProgressBar progressAutoTask;
+        private Label lblAutoTaskStatus;
     }
 }

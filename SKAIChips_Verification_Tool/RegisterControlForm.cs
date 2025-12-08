@@ -2,6 +2,7 @@ using ClosedXML.Excel;
 using SKAIChips_Verification_Tool.Chips;
 using SKAIChips_Verification_Tool.Core;
 using SKAIChips_Verification_Tool.Infra;
+using SKAIChips_Verification_Tool.Core.AutoTask;   // ★ 추가
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -40,10 +41,20 @@ namespace SKAIChips_Verification_Tool
 
         private readonly Dictionary<Register, uint> _regValues = new();
 
+        // ★ AutoTask 정의 목록
+        private readonly List<IAutoTask> _autoTasks = new();
+
         public RegisterControlForm()
         {
             InitializeComponent();
             InitUi();
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            // AutoTask 이벤트 해제
+            AutoTaskManager.Instance.ProgressChanged -= AutoTaskManager_ProgressChanged;
+            base.OnFormClosed(e);
         }
 
         private void InitUi()
@@ -123,6 +134,43 @@ namespace SKAIChips_Verification_Tool
 
             lblScriptFileName.Text = "(No script)";
             btnOpenScriptPath.Enabled = false;
+
+            // ★ AutoTask UI 초기화
+            InitAutoTaskUi();
+        }
+
+        // ★ AutoTask UI 초기화
+        private void InitAutoTaskUi()
+        {
+            if (comboAutoTask == null)
+                return;
+
+            comboAutoTask.Items.Clear();
+            _autoTasks.Clear();
+
+            // 일단은 DummyAutoTask 하나만 등록
+            var dummy = new DummyAutoTask("Dummy Task");
+            _autoTasks.Add(dummy);
+            comboAutoTask.Items.Add(dummy.Name);
+
+            if (comboAutoTask.Items.Count > 0)
+                comboAutoTask.SelectedIndex = 0;
+
+            btnAutoTaskRun.Enabled = true;
+            btnAutoTaskStop.Enabled = false;
+
+            progressAutoTask.Minimum = 0;
+            progressAutoTask.Maximum = 100;
+            progressAutoTask.Value = 0;
+            progressAutoTask.Style = ProgressBarStyle.Continuous;
+
+            lblAutoTaskStatus.Text = "Idle";
+
+            btnAutoTaskRun.Click += btnAutoTaskRun_Click;
+            btnAutoTaskStop.Click += btnAutoTaskStop_Click;
+            btnAutoTaskEdit.Click += btnAutoTaskEdit_Click;
+
+            AutoTaskManager.Instance.ProgressChanged += AutoTaskManager_ProgressChanged;
         }
 
         private void InitBitButtons()
@@ -1378,6 +1426,106 @@ namespace SKAIChips_Verification_Tool
                     _protocolSettings = dlg.Result;
                     UpdateStatusText();
                 }
+            }
+        }
+
+        // ============================
+        // ★ AutoTask 버튼/이벤트 구현
+        // ============================
+
+        private void btnAutoTaskRun_Click(object sender, EventArgs e)
+        {
+            if (AutoTaskManager.Instance.IsRunning)
+            {
+                MessageBox.Show("이미 AutoTask가 실행 중입니다.");
+                return;
+            }
+
+            if (comboAutoTask.SelectedIndex < 0 ||
+                comboAutoTask.SelectedIndex >= _autoTasks.Count)
+            {
+                MessageBox.Show("실행할 AutoTask를 선택하세요.");
+                return;
+            }
+
+            var task = _autoTasks[comboAutoTask.SelectedIndex];
+
+            // 필요하면 여기서 Chip, Bus, Instrument 등 컨텍스트에 넣으면 됨
+            var context = new AutoTaskContext();
+            context.Variables["Chip"] = _chip;
+            context.Variables["Bus"] = _bus;
+
+            bool started = AutoTaskManager.Instance.TryStart(task, context);
+            if (!started)
+            {
+                MessageBox.Show("AutoTask 시작에 실패했습니다.");
+            }
+        }
+
+        private void btnAutoTaskStop_Click(object sender, EventArgs e)
+        {
+            if (!AutoTaskManager.Instance.IsRunning)
+                return;
+
+            AutoTaskManager.Instance.Cancel();
+        }
+
+        private void btnAutoTaskEdit_Click(object sender, EventArgs e)
+        {
+            // 나중에 블럭 에디터 폼 연결 예정
+            MessageBox.Show("AutoTask Editor는 아직 구현되지 않았습니다.");
+        }
+
+        private void AutoTaskManager_ProgressChanged(object sender, AutoTaskProgress e)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action<object, AutoTaskProgress>(AutoTaskManager_ProgressChanged), sender, e);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(e.Message))
+                lblAutoTaskStatus.Text = e.Message;
+            else
+                lblAutoTaskStatus.Text = e.State.ToString();
+
+            if (e.TotalSteps > 0)
+            {
+                int pct = (int)(e.CurrentStep * 100.0 / e.TotalSteps);
+                if (pct < 0) pct = 0;
+                if (pct > 100) pct = 100;
+                progressAutoTask.Style = ProgressBarStyle.Continuous;
+                progressAutoTask.Value = pct;
+            }
+            else
+            {
+                // 총 스텝 정보가 없으면 그냥 마퀴 스타일로
+                if (e.State == AutoTaskState.Running)
+                {
+                    progressAutoTask.Style = ProgressBarStyle.Marquee;
+                }
+                else
+                {
+                    progressAutoTask.Style = ProgressBarStyle.Continuous;
+                    progressAutoTask.Value = 0;
+                }
+            }
+
+            switch (e.State)
+            {
+                case AutoTaskState.Running:
+                    btnAutoTaskRun.Enabled = false;
+                    btnAutoTaskStop.Enabled = true;
+                    break;
+
+                case AutoTaskState.Completed:
+                case AutoTaskState.Failed:
+                case AutoTaskState.Canceled:
+                    btnAutoTaskRun.Enabled = true;
+                    btnAutoTaskStop.Enabled = false;
+                    if (e.State != AutoTaskState.Running && e.TotalSteps <= 0)
+                        progressAutoTask.Value = 0;
+                    break;
             }
         }
     }
