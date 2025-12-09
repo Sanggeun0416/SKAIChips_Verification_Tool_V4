@@ -2,7 +2,6 @@ using ClosedXML.Excel;
 using SKAIChips_Verification_Tool.Chips;
 using SKAIChips_Verification_Tool.Core;
 using SKAIChips_Verification_Tool.Infra;
-using SKAIChips_Verification_Tool.Core.AutoTask;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -44,8 +43,6 @@ namespace SKAIChips_Verification_Tool
         private readonly Dictionary<Register, uint> _regValues = new();
         private readonly Dictionary<uint, Register> _addrToRegister = new();
 
-        private readonly List<ScriptAutoTask> _autoTasks = new();
-
         #endregion
 
         #region Constructor / Form lifecycle
@@ -54,13 +51,6 @@ namespace SKAIChips_Verification_Tool
         {
             InitializeComponent();
             InitUi();
-        }
-
-        protected override void OnFormClosed(FormClosedEventArgs e)
-        {
-            AutoTaskManager.Instance.ProgressChanged -= AutoTaskManager_ProgressChanged;
-            SaveAutoTasksForCurrentProject();
-            base.OnFormClosed(e);
         }
 
         #endregion
@@ -146,32 +136,6 @@ namespace SKAIChips_Verification_Tool
 
             lblScriptFileName.Text = "(No script)";
             btnOpenScriptPath.Enabled = false;
-
-            InitAutoTaskUi();
-        }
-
-        private void InitAutoTaskUi()
-        {
-            if (comboAutoTask == null)
-                return;
-
-            LoadAutoTasksForCurrentProject();
-
-            btnAutoTaskRun.Enabled = true;
-            btnAutoTaskStop.Enabled = false;
-
-            progressAutoTask.Minimum = 0;
-            progressAutoTask.Maximum = 100;
-            progressAutoTask.Value = 0;
-            progressAutoTask.Style = ProgressBarStyle.Continuous;
-
-            lblAutoTaskStatus.Text = "Idle";
-
-            btnAutoTaskRun.Click += btnAutoTaskRun_Click;
-            btnAutoTaskStop.Click += btnAutoTaskStop_Click;
-            btnAutoTaskEdit.Click += btnAutoTaskEdit_Click;
-
-            AutoTaskManager.Instance.ProgressChanged += AutoTaskManager_ProgressChanged;
         }
 
         private void InitBitButtons()
@@ -558,11 +522,6 @@ namespace SKAIChips_Verification_Tool
 
         private void comboProject_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (_selectedProject != null)
-            {
-                SaveAutoTasksForCurrentProject();
-            }
-
             var name = comboProject.SelectedItem as string;
             _selectedProject = null;
 
@@ -577,8 +536,6 @@ namespace SKAIChips_Verification_Tool
 
             _protocolSettings = null;
             UpdateStatusText();
-
-            LoadAutoTasksForCurrentProject();
         }
 
         private void btnFtdiSetup_Click(object sender, EventArgs e)
@@ -1518,196 +1475,6 @@ namespace SKAIChips_Verification_Tool
 
             var arg = $"/select,\"{_scriptFilePath}\"";
             Process.Start("explorer.exe", arg);
-        }
-
-        #endregion
-
-        #region AutoTask
-
-        private void LoadAutoTasksForCurrentProject()
-        {
-            _autoTasks.Clear();
-            comboAutoTask.Items.Clear();
-
-            string projectName = GetCurrentProjectName();
-
-            var loaded = AutoTaskStorage.Load(projectName);
-
-            if (loaded != null && loaded.Count > 0)
-            {
-                _autoTasks.AddRange(loaded);
-            }
-            else
-            {
-                var def = new AutoTaskDefinition("Task1");
-                var task = new ScriptAutoTask(def);
-                _autoTasks.Add(task);
-            }
-
-            foreach (var t in _autoTasks)
-                comboAutoTask.Items.Add(t.Name);
-
-            if (comboAutoTask.Items.Count > 0)
-                comboAutoTask.SelectedIndex = 0;
-        }
-
-        private void SaveAutoTasksForCurrentProject()
-        {
-            string projectName = GetCurrentProjectName();
-            AutoTaskStorage.Save(projectName, _autoTasks);
-        }
-
-        private void btnAutoTaskRun_Click(object sender, EventArgs e)
-        {
-            if (AutoTaskManager.Instance.IsRunning)
-            {
-                MessageBox.Show("이미 AutoTask가 실행 중입니다.");
-                return;
-            }
-
-            if (comboAutoTask.SelectedIndex < 0 ||
-                comboAutoTask.SelectedIndex >= _autoTasks.Count)
-            {
-                MessageBox.Show("실행할 AutoTask를 선택하세요.");
-                return;
-            }
-
-            var task = _autoTasks[comboAutoTask.SelectedIndex];
-
-            var context = new AutoTaskContext();
-            context.Variables["Chip"] = _chip;
-            context.Variables["Bus"] = _bus;
-
-            context.LogCallback = (type, addr, data, result) =>
-            {
-                if (InvokeRequired)
-                {
-                    BeginInvoke(new Action(() => AddLog(type, addr, data, result)));
-                }
-                else
-                {
-                    AddLog(type, addr, data, result);
-                }
-            };
-
-            context.RegisterUpdatedCallback = (addr, value) =>
-            {
-                if (InvokeRequired)
-                {
-                    BeginInvoke(new Action(() => OnRegisterUpdatedFromAutoTask(addr, value)));
-                }
-                else
-                {
-                    OnRegisterUpdatedFromAutoTask(addr, value);
-                }
-            };
-
-            bool started = AutoTaskManager.Instance.TryStart(task, context);
-            if (!started)
-                MessageBox.Show("AutoTask 시작에 실패했습니다.");
-        }
-
-        private void btnAutoTaskStop_Click(object sender, EventArgs e)
-        {
-            if (!AutoTaskManager.Instance.IsRunning)
-                return;
-
-            AutoTaskManager.Instance.Cancel();
-        }
-
-        private void btnAutoTaskEdit_Click(object sender, EventArgs e)
-        {
-            if (comboAutoTask.SelectedIndex < 0 ||
-                comboAutoTask.SelectedIndex >= _autoTasks.Count)
-            {
-                MessageBox.Show("편집할 AutoTask를 선택하세요.");
-                return;
-            }
-
-            var task = _autoTasks[comboAutoTask.SelectedIndex];
-
-            using (var dlg = new AutoTaskEditorForm(task.Definition))
-            {
-                if (dlg.ShowDialog(this) == DialogResult.OK)
-                {
-                    comboAutoTask.Items[comboAutoTask.SelectedIndex] = task.Name;
-                    SaveAutoTasksForCurrentProject();
-                }
-            }
-        }
-
-        private void AutoTaskManager_ProgressChanged(object sender, AutoTaskProgress e)
-        {
-            if (InvokeRequired)
-            {
-                BeginInvoke(new Action<object, AutoTaskProgress>(AutoTaskManager_ProgressChanged), sender, e);
-                return;
-            }
-
-            string status = e.State.ToString();
-
-            if (e.TotalSteps > 0)
-                status += $"  ({e.CurrentStep}/{e.TotalSteps})";
-
-            if (!string.IsNullOrWhiteSpace(e.Message))
-                status += $"  -  {e.Message}";
-
-            lblAutoTaskStatus.Text = status;
-
-            if (e.TotalSteps > 0)
-            {
-                progressAutoTask.Style = ProgressBarStyle.Continuous;
-
-                int pct = (int)(e.CurrentStep * 100.0 / e.TotalSteps);
-                if (pct < 0) pct = 0;
-                if (pct > 100) pct = 100;
-
-                progressAutoTask.Value = pct;
-            }
-            else
-            {
-                if (e.State == AutoTaskState.Running)
-                {
-                    progressAutoTask.Style = ProgressBarStyle.Marquee;
-                }
-                else
-                {
-                    progressAutoTask.Style = ProgressBarStyle.Continuous;
-                    progressAutoTask.Value = 0;
-                }
-            }
-
-            int row = dgvAutoTaskLog.Rows.Add();
-            var r = dgvAutoTaskLog.Rows[row];
-
-            r.Cells["colAutoTime"].Value = DateTime.Now.ToString("HH:mm:ss");
-            r.Cells["colAutoState"].Value = e.State.ToString();
-            r.Cells["colAutoStep"].Value = (e.TotalSteps > 0) ? $"{e.CurrentStep}/{e.TotalSteps}" : "";
-            r.Cells["colAutoMessage"].Value = e.Message;
-
-            dgvAutoTaskLog.FirstDisplayedScrollingRowIndex = row;
-
-            switch (e.State)
-            {
-                case AutoTaskState.Running:
-                    btnAutoTaskRun.Enabled = false;
-                    btnAutoTaskStop.Enabled = true;
-                    break;
-
-                case AutoTaskState.Completed:
-                case AutoTaskState.Failed:
-                case AutoTaskState.Canceled:
-                case AutoTaskState.Idle:
-                    btnAutoTaskRun.Enabled = true;
-                    btnAutoTaskStop.Enabled = false;
-
-                    if (e.TotalSteps <= 0)
-                    {
-                        progressAutoTask.Style = ProgressBarStyle.Continuous;
-                        progressAutoTask.Value = 0;
-                    }
-                    break;
-            }
         }
 
         #endregion
