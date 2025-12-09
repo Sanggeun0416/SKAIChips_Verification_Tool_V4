@@ -4,13 +4,24 @@ namespace SKAIChips_Verification_Tool.Core
 {
     public class RegisterGroup
     {
+        #region Properties
+
         public string Name { get; }
+
         public List<Register> Registers { get; } = new List<Register>();
+
+        #endregion
+
+        #region Constructors
 
         public RegisterGroup(string name)
         {
             Name = name;
         }
+
+        #endregion
+
+        #region Methods
 
         public Register AddRegister(string name, uint address)
         {
@@ -18,5 +29,7 @@ namespace SKAIChips_Verification_Tool.Core
             Registers.Add(reg);
             return reg;
         }
+
+        #endregion
     }
 }

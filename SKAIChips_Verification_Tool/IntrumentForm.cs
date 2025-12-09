@@ -12,16 +12,24 @@ namespace SKAIChips_Verification_Tool
 {
     public partial class InstrumentForm : Form
     {
+        #region Fields / Properties
+
         private readonly BindingList<InstrumentInfo> _instruments = new BindingList<InstrumentInfo>();
 
         private InstrumentInfo SelectedIns
         {
             get
             {
-                if (dataGridView_InsList.CurrentRow == null) return null;
+                if (dataGridView_InsList.CurrentRow == null)
+                    return null;
+
                 return dataGridView_InsList.CurrentRow.DataBoundItem as InstrumentInfo;
             }
         }
+
+        #endregion
+
+        #region Constructor / Init
 
         public InstrumentForm()
         {
@@ -54,6 +62,10 @@ namespace SKAIChips_Verification_Tool
             Load += InstrumentForm_Load;
             FormClosing += InstrumentForm_FormClosing;
         }
+
+        #endregion
+
+        #region Load / Save Settings
 
         private void InstrumentForm_Load(object sender, EventArgs e)
         {
@@ -98,7 +110,8 @@ namespace SKAIChips_Verification_Tool
 
                 string json = File.ReadAllText(path);
                 var list = JsonSerializer.Deserialize<List<InstrumentInfo>>(json);
-                if (list == null) return;
+                if (list == null)
+                    return;
 
                 _instruments.Clear();
                 foreach (var ins in list)
@@ -106,7 +119,6 @@ namespace SKAIChips_Verification_Tool
             }
             catch
             {
-                // 실패해도 프로그램은 계속 동작하게 그냥 무시
             }
         }
 
@@ -124,9 +136,12 @@ namespace SKAIChips_Verification_Tool
             }
             catch
             {
-                // 저장 실패해도 크리티컬은 아님
             }
         }
+
+        #endregion
+
+        #region Instrument List Handling
 
         private void dataGridView_InsList_SelectionChanged(object sender, EventArgs e)
         {
@@ -141,17 +156,21 @@ namespace SKAIChips_Verification_Tool
 
         private int GetNextIndexForType(string baseType)
         {
-            int max = -1;
+            var max = -1;
 
             foreach (var ins in _instruments)
             {
-                if (string.IsNullOrEmpty(ins.Type)) continue;
-                if (!ins.Type.StartsWith(baseType, StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.IsNullOrEmpty(ins.Type))
+                    continue;
 
-                string suffix = ins.Type.Substring(baseType.Length);
-                if (int.TryParse(suffix, out int n))
+                if (!ins.Type.StartsWith(baseType, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var suffix = ins.Type.Substring(baseType.Length);
+                if (int.TryParse(suffix, out var n))
                 {
-                    if (n > max) max = n;
+                    if (n > max)
+                        max = n;
                 }
             }
 
@@ -160,17 +179,17 @@ namespace SKAIChips_Verification_Tool
 
         private void button_AddInstrument_Click(object sender, EventArgs e)
         {
-            string baseType = comboBox_InsTypes.Text?.Trim();
+            var baseType = comboBox_InsTypes.Text?.Trim();
             if (string.IsNullOrEmpty(baseType))
                 return;
 
-            bool exists = comboBox_InsTypes.Items.Cast<object>()
+            var exists = comboBox_InsTypes.Items.Cast<object>()
                 .Any(x => string.Equals(x.ToString(), baseType, StringComparison.OrdinalIgnoreCase));
             if (!exists)
                 comboBox_InsTypes.Items.Add(baseType);
 
-            int idx = GetNextIndexForType(baseType);
-            string typeName = baseType + idx;
+            var idx = GetNextIndexForType(baseType);
+            var typeName = baseType + idx;
 
             var info = new InstrumentInfo
             {
@@ -183,7 +202,7 @@ namespace SKAIChips_Verification_Tool
             _instruments.Add(info);
 
             dataGridView_InsList.ClearSelection();
-            int rowIndex = _instruments.Count - 1;
+            var rowIndex = _instruments.Count - 1;
             if (rowIndex >= 0)
             {
                 dataGridView_InsList.Rows[rowIndex].Selected = true;
@@ -193,9 +212,12 @@ namespace SKAIChips_Verification_Tool
 
         private void button_RemoveInstrument_Click(object sender, EventArgs e)
         {
-            if (dataGridView_InsList.CurrentRow == null) return;
-            int index = dataGridView_InsList.CurrentRow.Index;
-            if (index < 0 || index >= _instruments.Count) return;
+            if (dataGridView_InsList.CurrentRow == null)
+                return;
+
+            var index = dataGridView_InsList.CurrentRow.Index;
+            if (index < 0 || index >= _instruments.Count)
+                return;
 
             _instruments.RemoveAt(index);
 
@@ -205,8 +227,9 @@ namespace SKAIChips_Verification_Tool
                 return;
             }
 
-            int newIndex = index;
-            if (newIndex >= _instruments.Count) newIndex = _instruments.Count - 1;
+            var newIndex = index;
+            if (newIndex >= _instruments.Count)
+                newIndex = _instruments.Count - 1;
 
             dataGridView_InsList.ClearSelection();
             dataGridView_InsList.Rows[newIndex].Selected = true;
@@ -215,10 +238,12 @@ namespace SKAIChips_Verification_Tool
 
         private void button_InsUp_Click(object sender, EventArgs e)
         {
-            if (dataGridView_InsList.CurrentRow == null) return;
+            if (dataGridView_InsList.CurrentRow == null)
+                return;
 
-            int index = dataGridView_InsList.CurrentRow.Index;
-            if (index <= 0 || index >= _instruments.Count) return;
+            var index = dataGridView_InsList.CurrentRow.Index;
+            if (index <= 0 || index >= _instruments.Count)
+                return;
 
             var item = _instruments[index];
             _instruments.RemoveAt(index);
@@ -231,10 +256,12 @@ namespace SKAIChips_Verification_Tool
 
         private void button_InsDown_Click(object sender, EventArgs e)
         {
-            if (dataGridView_InsList.CurrentRow == null) return;
+            if (dataGridView_InsList.CurrentRow == null)
+                return;
 
-            int index = dataGridView_InsList.CurrentRow.Index;
-            if (index < 0 || index >= _instruments.Count - 1) return;
+            var index = dataGridView_InsList.CurrentRow.Index;
+            if (index < 0 || index >= _instruments.Count - 1)
+                return;
 
             var item = _instruments[index];
             _instruments.RemoveAt(index);
@@ -247,15 +274,23 @@ namespace SKAIChips_Verification_Tool
 
         private void dataGridView_InsList_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex < 0) return;
-            if (!ReferenceEquals(dataGridView_InsList.Columns[e.ColumnIndex], Column_InsTest)) return;
+            if (e.RowIndex < 0)
+                return;
+
+            if (!ReferenceEquals(dataGridView_InsList.Columns[e.ColumnIndex], Column_InsTest))
+                return;
 
             var info = dataGridView_InsList.Rows[e.RowIndex].DataBoundItem as InstrumentInfo;
-            if (info == null) return;
+            if (info == null)
+                return;
 
             TestInstrument(info);
             dataGridView_InsList.Refresh();
         }
+
+        #endregion
+
+        #region Test / Command / Capture
 
         private void TestInstrument(InstrumentInfo info)
         {
@@ -271,8 +306,9 @@ namespace SKAIChips_Verification_Tool
                 return;
             }
 
-            int rowIndex = _instruments.IndexOf(info);
+            var rowIndex = _instruments.IndexOf(info);
             DataGridViewCell nameCell = null;
+
             if (rowIndex >= 0 && rowIndex < dataGridView_InsList.Rows.Count)
                 nameCell = dataGridView_InsList.Rows[rowIndex].Cells[Column_InsName.Index];
 
@@ -290,7 +326,7 @@ namespace SKAIChips_Verification_Tool
                         return;
                     }
 
-                    string idn = scpi.Query("*IDN?", 2000);
+                    var idn = scpi.Query("*IDN?", 2000);
                     info.Name = idn;
 
                     if (nameCell != null)
@@ -313,7 +349,8 @@ namespace SKAIChips_Verification_Tool
         private void button_SendInsCommand_Click(object sender, EventArgs e)
         {
             var ins = SelectedIns;
-            if (ins == null) return;
+            if (ins == null)
+                return;
 
             if (!ins.Enabled)
             {
@@ -327,8 +364,9 @@ namespace SKAIChips_Verification_Tool
                 return;
             }
 
-            string cmd = textBox_InsCommand.Text;
-            if (string.IsNullOrWhiteSpace(cmd)) return;
+            var cmd = textBox_InsCommand.Text;
+            if (string.IsNullOrWhiteSpace(cmd))
+                return;
 
             AppendLog($"[{DateTime.Now:HH:mm:ss}] {ins.Type} > {cmd}");
 
@@ -344,7 +382,7 @@ namespace SKAIChips_Verification_Tool
 
                     if (cmd.Contains("?"))
                     {
-                        string reply = scpi.Query(cmd, 2000);
+                        var reply = scpi.Query(cmd, 2000);
                         AppendLog($"[{DateTime.Now:HH:mm:ss}] {ins.Type} < {reply}");
                     }
                     else
@@ -365,17 +403,18 @@ namespace SKAIChips_Verification_Tool
 
         private void textBox_InsCommand_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Enter)
-            {
-                e.SuppressKeyPress = true;
-                button_SendInsCommand_Click(sender, EventArgs.Empty);
-            }
+            if (e.KeyCode != Keys.Enter)
+                return;
+
+            e.SuppressKeyPress = true;
+            button_SendInsCommand_Click(sender, EventArgs.Empty);
         }
 
         private void button_InsScreenCapture_Click(object sender, EventArgs e)
         {
             var ins = SelectedIns;
-            if (ins == null) return;
+            if (ins == null)
+                return;
 
             if (!ins.Enabled)
             {
@@ -403,17 +442,17 @@ namespace SKAIChips_Verification_Tool
 
                     if (ins.Type.StartsWith("SpectrumAnalyzer", StringComparison.OrdinalIgnoreCase))
                     {
-                        string dir = scpi.Query(":MMEMory:CDIRectory?", 2000);
-                        string tempName = "\\JL_TempScreenCapture.png";
-                        string cleaned = string.Empty;
+                        var dir = scpi.Query(":MMEMory:CDIRectory?", 2000);
+                        var tempName = "\\JL_TempScreenCapture.png";
+                        var cleaned = string.Empty;
 
-                        foreach (char c in dir)
+                        foreach (var c in dir)
                         {
                             if (c != '"' && c != '\n' && c != '\r')
                                 cleaned += c;
                         }
 
-                        string fullPath = cleaned + tempName;
+                        var fullPath = cleaned + tempName;
 
                         scpi.Write(":MMEMory:STORe:SCReen \"" + fullPath + "\"");
                         scpi.Write("*WAI");
@@ -460,17 +499,28 @@ namespace SKAIChips_Verification_Tool
 
         private void AppendLog(string text)
         {
+            if (string.IsNullOrEmpty(text))
+                return;
+
             if (richTextBox_InsCommandLog.TextLength > 0)
                 richTextBox_InsCommandLog.AppendText(Environment.NewLine);
 
             richTextBox_InsCommandLog.AppendText(text);
         }
 
+        #endregion
+
+        #region SCPI Client Factory
+
         private IScpiClient CreateScpiClient(string visaAddress)
         {
             return new VisaScpiClient(visaAddress);
         }
+
+        #endregion
     }
+
+    #region InstrumentInfo
 
     public class InstrumentInfo : INotifyPropertyChanged
     {
@@ -484,7 +534,8 @@ namespace SKAIChips_Verification_Tool
             get => type;
             set
             {
-                if (type == value) return;
+                if (type == value)
+                    return;
                 type = value;
                 OnPropertyChanged(nameof(Type));
             }
@@ -495,7 +546,8 @@ namespace SKAIChips_Verification_Tool
             get => enabled;
             set
             {
-                if (enabled == value) return;
+                if (enabled == value)
+                    return;
                 enabled = value;
                 OnPropertyChanged(nameof(Enabled));
             }
@@ -506,7 +558,8 @@ namespace SKAIChips_Verification_Tool
             get => visaAddress;
             set
             {
-                if (visaAddress == value) return;
+                if (visaAddress == value)
+                    return;
                 visaAddress = value;
                 OnPropertyChanged(nameof(VisaAddress));
             }
@@ -517,7 +570,8 @@ namespace SKAIChips_Verification_Tool
             get => name;
             set
             {
-                if (name == value) return;
+                if (name == value)
+                    return;
                 name = value;
                 OnPropertyChanged(nameof(Name));
             }
@@ -532,6 +586,10 @@ namespace SKAIChips_Verification_Tool
                 h(this, new PropertyChangedEventArgs(propertyName));
         }
     }
+
+    #endregion
+
+    #region SCPI Interfaces / Implementation
 
     public interface IScpiClient : IDisposable
     {
@@ -558,7 +616,7 @@ namespace SKAIChips_Verification_Tool
                 return true;
 
             var rm = new ResourceManager();
-            string addr = _visaAddress.Trim();
+            var addr = _visaAddress.Trim();
 
             _session = rm.Open(addr) as IMessageBasedSession;
             if (_session == null)
@@ -594,7 +652,7 @@ namespace SKAIChips_Verification_Tool
             if (command == null)
                 throw new ArgumentNullException(nameof(command));
 
-            int oldTimeout = _session.TimeoutMilliseconds;
+            var oldTimeout = _session.TimeoutMilliseconds;
             try
             {
                 _session.TimeoutMilliseconds = timeoutMs;
@@ -614,7 +672,7 @@ namespace SKAIChips_Verification_Tool
             if (command == null)
                 throw new ArgumentNullException(nameof(command));
 
-            int oldTimeout = _session.TimeoutMilliseconds;
+            var oldTimeout = _session.TimeoutMilliseconds;
             try
             {
                 _session.TimeoutMilliseconds = timeoutMs;
@@ -633,4 +691,6 @@ namespace SKAIChips_Verification_Tool
             Close();
         }
     }
+
+    #endregion
 }

@@ -5,6 +5,8 @@ namespace SKAIChips_Verification_Tool
 {
     partial class ProtocolSetupForm
     {
+        #region Fields
+
         private System.ComponentModel.IContainer components = null;
         private Label lblProtocol;
         private ComboBox comboProtocol;
@@ -15,12 +17,21 @@ namespace SKAIChips_Verification_Tool
         private Button btnOk;
         private Button btnCancel;
 
+        #endregion
+
+        #region Dispose
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing && components != null)
                 components.Dispose();
+
             base.Dispose(disposing);
         }
+
+        #endregion
+
+        #region InitializeComponent
 
         private void InitializeComponent()
         {
@@ -136,5 +147,7 @@ namespace SKAIChips_Verification_Tool
             ResumeLayout(false);
             PerformLayout();
         }
+
+        #endregion
     }
 }

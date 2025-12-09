@@ -6,21 +6,44 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
 {
     public sealed class AutoTaskManager
     {
+        #region Singleton
+
         private static readonly Lazy<AutoTaskManager> _instance =
-            new(() => new AutoTaskManager());
+            new Lazy<AutoTaskManager>(() => new AutoTaskManager());
+
         public static AutoTaskManager Instance => _instance.Value;
 
-        private readonly object _lock = new();
+        #endregion
+
+        #region Fields
+
+        private readonly object _lock = new object();
         private CancellationTokenSource _cts;
         private Task _runningTask;
 
+        #endregion
+
+        #region Properties
+
         public bool IsRunning => _runningTask != null && !_runningTask.IsCompleted;
 
+        #endregion
+
+        #region Events
+
         public event EventHandler<AutoTaskProgress> ProgressChanged;
+
+        #endregion
+
+        #region Constructors
 
         private AutoTaskManager()
         {
         }
+
+        #endregion
+
+        #region Methods
 
         public bool TryStart(IAutoTask task, AutoTaskContext context)
         {
@@ -32,9 +55,8 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
                 _cts = new CancellationTokenSource();
                 var token = _cts.Token;
 
-                // 여기서 System.Progress<T> 를 명시적으로 사용
                 IProgress<AutoTaskProgress> progress =
-                    new System.Progress<AutoTaskProgress>(p =>
+                    new Progress<AutoTaskProgress>(p =>
                     {
                         ProgressChanged?.Invoke(this, p);
                     });
@@ -86,5 +108,7 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
                 _cts?.Cancel();
             }
         }
+
+        #endregion
     }
 }

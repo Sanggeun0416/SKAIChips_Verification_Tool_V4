@@ -16,6 +16,8 @@ namespace SKAIChips_Verification_Tool
 {
     public partial class RegisterControlForm : Form
     {
+        #region Fields
+
         private IBus _bus;
         private IRegisterChip _chip;
 
@@ -44,6 +46,10 @@ namespace SKAIChips_Verification_Tool
 
         private readonly List<ScriptAutoTask> _autoTasks = new();
 
+        #endregion
+
+        #region Constructor / Form lifecycle
+
         public RegisterControlForm()
         {
             InitializeComponent();
@@ -52,10 +58,14 @@ namespace SKAIChips_Verification_Tool
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
-            // AutoTask 이벤트 해제
             AutoTaskManager.Instance.ProgressChanged -= AutoTaskManager_ProgressChanged;
+            SaveAutoTasksForCurrentProject();
             base.OnFormClosed(e);
         }
+
+        #endregion
+
+        #region Init UI
 
         private void InitUi()
         {
@@ -84,7 +94,6 @@ namespace SKAIChips_Verification_Tool
                 dgvBits.Columns.Add(colCurrent);
                 dgvBits.Columns.Add(colDesc);
 
-                // ★ CellEndEdit 연결
                 dgvBits.CellEndEdit += dgvBits_CellEndEdit;
             }
 
@@ -138,25 +147,15 @@ namespace SKAIChips_Verification_Tool
             lblScriptFileName.Text = "(No script)";
             btnOpenScriptPath.Enabled = false;
 
-            // ★ AutoTask UI 초기화
             InitAutoTaskUi();
         }
 
-        // ★ AutoTask UI 초기화
         private void InitAutoTaskUi()
         {
             if (comboAutoTask == null)
                 return;
 
-            _autoTasks.Clear();
-            comboAutoTask.Items.Clear();
-
-            var task = new ScriptAutoTask("Task1");
-            _autoTasks.Add(task);
-            comboAutoTask.Items.Add(task.Name);
-
-            if (comboAutoTask.Items.Count > 0)
-                comboAutoTask.SelectedIndex = 0;
+            LoadAutoTasksForCurrentProject();
 
             btnAutoTaskRun.Enabled = true;
             btnAutoTaskStop.Enabled = false;
@@ -182,14 +181,16 @@ namespace SKAIChips_Verification_Tool
 
             for (int i = 0; i < 32; i++)
             {
-                var btn = new Button();
-                btn.Margin = new Padding(1);
-                btn.Padding = new Padding(0);
-                btn.Width = 24;
-                btn.Height = 25;
-                btn.Text = "0";
-                btn.Tag = i;
-                btn.FlatStyle = FlatStyle.Flat;
+                var btn = new Button
+                {
+                    Margin = new Padding(1),
+                    Padding = new Padding(0),
+                    Width = 24,
+                    Height = 25,
+                    Text = "0",
+                    Tag = i,
+                    FlatStyle = FlatStyle.Flat
+                };
                 btn.FlatAppearance.BorderSize = 1;
                 btn.Click += BitButton_Click;
 
@@ -203,6 +204,54 @@ namespace SKAIChips_Verification_Tool
 
             UpdateBitButtonsFromValue(_currentRegValue);
             UpdateBitButtonLayout();
+        }
+
+        private void UpdateBitButtonLayout()
+        {
+            int cols = 16;
+
+            if (flowBitsTop.ClientSize.Width > 0)
+            {
+                int panelWidth = flowBitsTop.ClientSize.Width;
+                int btnWidth = (panelWidth - (cols + 1) * 2) / cols;
+                if (btnWidth < 16) btnWidth = 16;
+                if (btnWidth > 40) btnWidth = 40;
+                int btnHeight = 25;
+
+                for (int i = 0; i < 16; i++)
+                {
+                    var btn = _bitButtons[i];
+                    if (btn == null) continue;
+                    btn.Width = btnWidth;
+                    btn.Height = btnHeight;
+                }
+            }
+
+            if (flowBitsBottom.ClientSize.Width > 0)
+            {
+                int panelWidth = flowBitsBottom.ClientSize.Width;
+                int btnWidth = (panelWidth - (cols + 1) * 2) / cols;
+                if (btnWidth < 16) btnWidth = 16;
+                if (btnWidth > 40) btnWidth = 40;
+                int btnHeight = 25;
+
+                for (int i = 16; i < 32; i++)
+                {
+                    var btn = _bitButtons[i];
+                    if (btn == null) continue;
+                    btn.Width = btnWidth;
+                    btn.Height = btnHeight;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Common helpers
+
+        private string GetCurrentProjectName()
+        {
+            return _selectedProject?.Name ?? "UnknownProject";
         }
 
         private string PromptText(string title, string label, string defaultValue)
@@ -278,179 +327,6 @@ namespace SKAIChips_Verification_Tool
                     return child;
             }
             return null;
-        }
-
-        private void dgvBits_CellEndEdit(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0)
-                return;
-
-            if (dgvBits.Columns[e.ColumnIndex].Name != "colCurrent")
-                return;
-
-            if (_selectedRegister == null)
-                return;
-
-            uint newValue = _currentRegValue;
-
-            foreach (DataGridViewRow r in dgvBits.Rows)
-            {
-                if (r.Tag is not RegisterItem item)
-                    continue;
-
-                var cell = r.Cells["colCurrent"].Value;
-                if (cell == null)
-                    continue;
-
-                string text = cell.ToString();
-                if (string.IsNullOrWhiteSpace(text))
-                    continue;
-
-                int width = item.UpperBit - item.LowerBit + 1;
-                if (!TryParseFieldValue(text, width, out uint fieldVal))
-                    continue;
-
-                uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << item.LowerBit;
-
-                newValue &= ~mask;
-                newValue |= (fieldVal << item.LowerBit);
-            }
-
-            _currentRegValue = newValue;
-            UpdateBitCurrentValues();  // txtRegValueHex, 비트 버튼, dgvBits Current, numRegIndex 다 같이 갱신
-        }
-
-        private void UpdateBitButtonLayout()
-        {
-            int cols = 16;
-
-            if (flowBitsTop.ClientSize.Width > 0)
-            {
-                int panelWidth = flowBitsTop.ClientSize.Width;
-
-                int btnWidth = (panelWidth - (cols + 1) * 2) / cols;
-                if (btnWidth < 16) btnWidth = 16;
-                if (btnWidth > 40) btnWidth = 40;
-
-                int btnHeight = 25;
-
-                for (int i = 0; i < 16; i++)
-                {
-                    var btn = _bitButtons[i];
-                    if (btn == null) continue;
-                    btn.Width = btnWidth;
-                    btn.Height = btnHeight;
-                }
-            }
-
-            if (flowBitsBottom.ClientSize.Width > 0)
-            {
-                int panelWidth = flowBitsBottom.ClientSize.Width;
-
-                int btnWidth = (panelWidth - (cols + 1) * 2) / cols;
-                if (btnWidth < 16) btnWidth = 16;
-                if (btnWidth > 40) btnWidth = 40;
-
-                int btnHeight = 25;
-
-                for (int i = 16; i < 32; i++)
-                {
-                    var btn = _bitButtons[i];
-                    if (btn == null) continue;
-                    btn.Width = btnWidth;
-                    btn.Height = btnHeight;
-                }
-            }
-        }
-
-        private void BitButton_Click(object sender, EventArgs e)
-        {
-            if (_isUpdatingBits)
-                return;
-
-            if (sender is not Button btn)
-                return;
-
-            btn.Text = (btn.Text == "0") ? "1" : "0";
-
-            _currentRegValue = GetValueFromBitButtons();
-            UpdateBitCurrentValues();
-        }
-
-        private void UpdateBitButtonsFromValue(uint value)
-        {
-            _isUpdatingBits = true;
-
-            for (int bit = 0; bit < 32; bit++)
-            {
-                int btnIndex = 31 - bit;
-                uint mask = 1u << bit;
-                bool isOne = (value & mask) != 0;
-
-                var btn = _bitButtons[btnIndex];
-                if (btn != null)
-                    btn.Text = isOne ? "1" : "0";
-            }
-
-            _isUpdatingBits = false;
-        }
-
-        private uint GetValueFromBitButtons()
-        {
-            uint value = 0;
-
-            for (int btnIndex = 0; btnIndex < 32; btnIndex++)
-            {
-                var btn = _bitButtons[btnIndex];
-                if (btn == null) continue;
-
-                int bit = 31 - btnIndex;
-                if (btn.Text == "1")
-                    value |= (1u << bit);
-            }
-
-            return value;
-        }
-
-        private void txtRegValueHex_Leave(object sender, EventArgs e)
-        {
-            if (TryParseHexUInt(txtRegValueHex.Text, out uint v))
-            {
-                _currentRegValue = v;
-                UpdateBitCurrentValues();
-            }
-            else
-            {
-                MessageBox.Show("레지스터 값 형식이 잘못되었습니다. 예: 0x00000000");
-                txtRegValueHex.Text = $"0x{_currentRegValue:X8}";
-            }
-        }
-
-        private void LoadProjects()
-        {
-            _projects.Clear();
-            comboProject.Items.Clear();
-
-            var projectType = typeof(IChipProject);
-            var asm = typeof(OasisProject).Assembly;
-
-            foreach (var t in asm.GetTypes())
-            {
-                if (t.IsAbstract || t.IsInterface)
-                    continue;
-
-                if (!projectType.IsAssignableFrom(t))
-                    continue;
-
-                if (Activator.CreateInstance(t) is IChipProject proj)
-                {
-                    _projects.Add(proj);
-                    comboProject.Items.Add(proj.Name);
-                }
-            }
-
-            if (comboProject.Items.Count > 0)
-                comboProject.SelectedIndex = 0;
         }
 
         private void UpdateStatusText()
@@ -553,52 +429,35 @@ namespace SKAIChips_Verification_Tool
             dgvLog.FirstDisplayedScrollingRowIndex = rowIndex;
         }
 
-        // 현재 선택된 프로젝트 기준으로 AutoTask 로드
-        private void LoadAutoTasksForCurrentProject()
+        #endregion
+
+        #region Project / connection
+
+        private void LoadProjects()
         {
-            if (comboAutoTask == null)
-                return;
+            _projects.Clear();
+            comboProject.Items.Clear();
 
-            comboAutoTask.Items.Clear();
-            _autoTasks.Clear();
+            var projectType = typeof(IChipProject);
+            var asm = typeof(OasisProject).Assembly;
 
-            if (_selectedProject == null)
+            foreach (var t in asm.GetTypes())
             {
-                lblAutoTaskStatus.Text = "AutoTask: No Project";
-                return;
+                if (t.IsAbstract || t.IsInterface)
+                    continue;
+
+                if (!projectType.IsAssignableFrom(t))
+                    continue;
+
+                if (Activator.CreateInstance(t) is IChipProject proj)
+                {
+                    _projects.Add(proj);
+                    comboProject.Items.Add(proj.Name);
+                }
             }
 
-            var tasks = AutoTaskStorage.Load(_selectedProject.Name);
-            if (tasks == null || tasks.Count == 0)
-            {
-                // JSON 없으면 기본 Task 하나 생성
-                var defaultTask = new ScriptAutoTask("Task1");
-                _autoTasks.Add(defaultTask);
-                comboAutoTask.Items.Add(defaultTask.Name);
-                comboAutoTask.SelectedIndex = 0;
-                lblAutoTaskStatus.Text = "AutoTask: New Task1 (no JSON)";
-                return;
-            }
-
-            foreach (var t in tasks)
-            {
-                _autoTasks.Add(t);
-                comboAutoTask.Items.Add(t.Name);
-            }
-
-            if (comboAutoTask.Items.Count > 0)
-                comboAutoTask.SelectedIndex = 0;
-
-            lblAutoTaskStatus.Text = $"AutoTask: Loaded ({tasks.Count})";
-        }
-
-        // 현재 선택된 프로젝트 기준으로 AutoTask 저장
-        private void SaveAutoTasksForCurrentProject()
-        {
-            if (_selectedProject == null)
-                return;
-
-            AutoTaskStorage.Save(_selectedProject.Name, _autoTasks);
+            if (comboProject.Items.Count > 0)
+                comboProject.SelectedIndex = 0;
         }
 
         private void DisconnectBus()
@@ -697,6 +556,172 @@ namespace SKAIChips_Verification_Tool
                 DisconnectBus();
         }
 
+        private void comboProject_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_selectedProject != null)
+            {
+                SaveAutoTasksForCurrentProject();
+            }
+
+            var name = comboProject.SelectedItem as string;
+            _selectedProject = null;
+
+            foreach (var p in _projects)
+            {
+                if (p.Name == name)
+                {
+                    _selectedProject = p;
+                    break;
+                }
+            }
+
+            _protocolSettings = null;
+            UpdateStatusText();
+
+            LoadAutoTasksForCurrentProject();
+        }
+
+        private void btnFtdiSetup_Click(object sender, EventArgs e)
+        {
+            using (var dlg = new FtdiSetupForm(_ftdiSettings))
+            {
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    _ftdiSettings = dlg.Result;
+                    UpdateStatusText();
+                }
+            }
+        }
+
+        private void btnProtocolSetup_Click(object sender, EventArgs e)
+        {
+            if (_selectedProject == null)
+            {
+                MessageBox.Show("먼저 프로젝트를 선택하세요.");
+                return;
+            }
+
+            using (var dlg = new ProtocolSetupForm(_selectedProject, _protocolSettings))
+            {
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    _protocolSettings = dlg.Result;
+                    UpdateStatusText();
+                }
+            }
+        }
+
+        #endregion
+
+        #region Bit / value editing
+
+        private void dgvBits_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0)
+                return;
+
+            if (dgvBits.Columns[e.ColumnIndex].Name != "colCurrent")
+                return;
+
+            if (_selectedRegister == null)
+                return;
+
+            uint newValue = _currentRegValue;
+
+            foreach (DataGridViewRow r in dgvBits.Rows)
+            {
+                if (r.Tag is not RegisterItem item)
+                    continue;
+
+                var cell = r.Cells["colCurrent"].Value;
+                if (cell == null)
+                    continue;
+
+                string text = cell.ToString();
+                if (string.IsNullOrWhiteSpace(text))
+                    continue;
+
+                int width = item.UpperBit - item.LowerBit + 1;
+                if (!TryParseFieldValue(text, width, out uint fieldVal))
+                    continue;
+
+                uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << item.LowerBit;
+
+                newValue &= ~mask;
+                newValue |= (fieldVal << item.LowerBit);
+            }
+
+            _currentRegValue = newValue;
+            UpdateBitCurrentValues();
+        }
+
+        private void BitButton_Click(object sender, EventArgs e)
+        {
+            if (_isUpdatingBits)
+                return;
+
+            if (sender is not Button btn)
+                return;
+
+            btn.Text = (btn.Text == "0") ? "1" : "0";
+
+            _currentRegValue = GetValueFromBitButtons();
+            UpdateBitCurrentValues();
+        }
+
+        private void UpdateBitButtonsFromValue(uint value)
+        {
+            _isUpdatingBits = true;
+
+            for (int bit = 0; bit < 32; bit++)
+            {
+                int btnIndex = 31 - bit;
+                uint mask = 1u << bit;
+                bool isOne = (value & mask) != 0;
+
+                var btn = _bitButtons[btnIndex];
+                if (btn != null)
+                    btn.Text = isOne ? "1" : "0";
+            }
+
+            _isUpdatingBits = false;
+        }
+
+        private uint GetValueFromBitButtons()
+        {
+            uint value = 0;
+
+            for (int btnIndex = 0; btnIndex < 32; btnIndex++)
+            {
+                var btn = _bitButtons[btnIndex];
+                if (btn == null) continue;
+
+                int bit = 31 - btnIndex;
+                if (btn.Text == "1")
+                    value |= (1u << bit);
+            }
+
+            return value;
+        }
+
+        private void txtRegValueHex_Leave(object sender, EventArgs e)
+        {
+            if (TryParseHexUInt(txtRegValueHex.Text, out uint v))
+            {
+                _currentRegValue = v;
+                UpdateBitCurrentValues();
+            }
+            else
+            {
+                MessageBox.Show("레지스터 값 형식이 잘못되었습니다. 예: 0x00000000");
+                txtRegValueHex.Text = $"0x{_currentRegValue:X8}";
+            }
+        }
+
+        #endregion
+
+        #region Read / Write
+
         private async void btnRead_Click(object sender, EventArgs e)
         {
             if (_chip == null)
@@ -766,7 +791,6 @@ namespace SKAIChips_Verification_Tool
                 }
 
                 uint baseValue = _currentRegValue;
-
                 uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << selItem.LowerBit;
                 newValue = baseValue;
                 newValue &= ~mask;
@@ -930,6 +954,10 @@ namespace SKAIChips_Verification_Tool
             }
         }
 
+        #endregion
+
+        #region Register map / Excel
+
         private void btnSelectMapFile_Click(object sender, EventArgs e)
         {
             using (var ofd = new OpenFileDialog())
@@ -1029,7 +1057,7 @@ namespace SKAIChips_Verification_Tool
         private void BuildRegisterTree()
         {
             tvRegs.Nodes.Clear();
-            _addrToRegister.Clear();   // ★ 추가
+            _addrToRegister.Clear();
 
             foreach (var g in _groups)
             {
@@ -1045,7 +1073,6 @@ namespace SKAIChips_Verification_Tool
                         Tag = reg
                     };
 
-                    // ★ 주소 → Register 매핑
                     _addrToRegister[reg.Address] = reg;
 
                     foreach (var item in reg.Items)
@@ -1083,20 +1110,16 @@ namespace SKAIChips_Verification_Tool
 
         private void OnRegisterUpdatedFromAutoTask(uint addr, uint value)
         {
-            // 주소에 해당하는 Register 찾기
             if (!_addrToRegister.TryGetValue(addr, out var reg))
                 return;
 
-            // 내부 값 업데이트
             _regValues[reg] = value;
 
-            // 현재 선택된 레지스터가 아니면 여기까지만
             if (!ReferenceEquals(reg, _selectedRegister))
                 return;
 
-            // 현재 선택 레지스터면 UI 싹 갱신
             _currentRegValue = value;
-            UpdateBitCurrentValues();   // txtRegValueHex, dgvBits Current, 비트 버튼, numRegIndex 모두 갱신
+            UpdateBitCurrentValues();
         }
 
         private uint GetRegisterValue(Register reg)
@@ -1256,7 +1279,7 @@ namespace SKAIChips_Verification_Tool
                 var btn = _bitButtons[btnIndex];
                 if (btn == null) continue;
 
-                bool inRange = (bit >= item.LowerBit) && (bit <= item.UpperBit);
+                bool inRange = bit >= item.LowerBit && bit <= item.UpperBit;
                 btn.Enabled = inRange;
             }
         }
@@ -1344,6 +1367,10 @@ namespace SKAIChips_Verification_Tool
             _currentRegValue = regVal;
             UpdateBitCurrentValues();
         }
+
+        #endregion
+
+        #region Legacy register script
 
         private void SaveRegisterScriptLegacy(string path)
         {
@@ -1493,60 +1520,42 @@ namespace SKAIChips_Verification_Tool
             Process.Start("explorer.exe", arg);
         }
 
-        private void comboProject_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            var name = comboProject.SelectedItem as string;
-            _selectedProject = null;
+        #endregion
 
-            foreach (var p in _projects)
+        #region AutoTask
+
+        private void LoadAutoTasksForCurrentProject()
+        {
+            _autoTasks.Clear();
+            comboAutoTask.Items.Clear();
+
+            string projectName = GetCurrentProjectName();
+
+            var loaded = AutoTaskStorage.Load(projectName);
+
+            if (loaded != null && loaded.Count > 0)
             {
-                if (p.Name == name)
-                {
-                    _selectedProject = p;
-                    break;
-                }
+                _autoTasks.AddRange(loaded);
+            }
+            else
+            {
+                var def = new AutoTaskDefinition("Task1");
+                var task = new ScriptAutoTask(def);
+                _autoTasks.Add(task);
             }
 
-            _protocolSettings = null;
-            UpdateStatusText();
+            foreach (var t in _autoTasks)
+                comboAutoTask.Items.Add(t.Name);
 
-            // ★ 프로젝트 바뀔 때 AutoTask 로드
-            LoadAutoTasksForCurrentProject();
+            if (comboAutoTask.Items.Count > 0)
+                comboAutoTask.SelectedIndex = 0;
         }
 
-        private void btnFtdiSetup_Click(object sender, EventArgs e)
+        private void SaveAutoTasksForCurrentProject()
         {
-            using (var dlg = new FtdiSetupForm(_ftdiSettings))
-            {
-                if (dlg.ShowDialog(this) == DialogResult.OK)
-                {
-                    _ftdiSettings = dlg.Result;
-                    UpdateStatusText();
-                }
-            }
+            string projectName = GetCurrentProjectName();
+            AutoTaskStorage.Save(projectName, _autoTasks);
         }
-
-        private void btnProtocolSetup_Click(object sender, EventArgs e)
-        {
-            if (_selectedProject == null)
-            {
-                MessageBox.Show("먼저 프로젝트를 선택하세요.");
-                return;
-            }
-
-            using (var dlg = new ProtocolSetupForm(_selectedProject, _protocolSettings))
-            {
-                if (dlg.ShowDialog(this) == DialogResult.OK)
-                {
-                    _protocolSettings = dlg.Result;
-                    UpdateStatusText();
-                }
-            }
-        }
-
-        // ============================
-        // ★ AutoTask 버튼/이벤트 구현
-        // ============================
 
         private void btnAutoTaskRun_Click(object sender, EventArgs e)
         {
@@ -1569,7 +1578,6 @@ namespace SKAIChips_Verification_Tool
             context.Variables["Chip"] = _chip;
             context.Variables["Bus"] = _bus;
 
-            // ★ AutoTask → Register Control Log로 로그 보내는 콜백
             context.LogCallback = (type, addr, data, result) =>
             {
                 if (InvokeRequired)
@@ -1582,7 +1590,6 @@ namespace SKAIChips_Verification_Tool
                 }
             };
 
-            // ★ AutoTask → 현재 선택된 레지스터 UI 갱신 콜백
             context.RegisterUpdatedCallback = (addr, value) =>
             {
                 if (InvokeRequired)
@@ -1623,10 +1630,7 @@ namespace SKAIChips_Verification_Tool
             {
                 if (dlg.ShowDialog(this) == DialogResult.OK)
                 {
-                    // 이름 바꾸는 기능을 나중에 추가하면 여기서 combo 텍스트도 갱신
                     comboAutoTask.Items[comboAutoTask.SelectedIndex] = task.Name;
-
-                    // ★ 편집 끝난 시점에 JSON 저장
                     SaveAutoTasksForCurrentProject();
                 }
             }
@@ -1640,7 +1644,6 @@ namespace SKAIChips_Verification_Tool
                 return;
             }
 
-            // 상태 텍스트 구성 (State + Step + Message)
             string status = e.State.ToString();
 
             if (e.TotalSteps > 0)
@@ -1651,7 +1654,6 @@ namespace SKAIChips_Verification_Tool
 
             lblAutoTaskStatus.Text = status;
 
-            // 프로그레스 바
             if (e.TotalSteps > 0)
             {
                 progressAutoTask.Style = ProgressBarStyle.Continuous;
@@ -1675,7 +1677,6 @@ namespace SKAIChips_Verification_Tool
                 }
             }
 
-            // 로그 그리드에 한 줄 추가 (열 이름은 너가 만든 걸로 맞춰서 쓰면 됨)
             int row = dgvAutoTaskLog.Rows.Add();
             var r = dgvAutoTaskLog.Rows[row];
 
@@ -1686,7 +1687,6 @@ namespace SKAIChips_Verification_Tool
 
             dgvAutoTaskLog.FirstDisplayedScrollingRowIndex = row;
 
-            // 버튼 활성/비활성
             switch (e.State)
             {
                 case AutoTaskState.Running:
@@ -1697,7 +1697,7 @@ namespace SKAIChips_Verification_Tool
                 case AutoTaskState.Completed:
                 case AutoTaskState.Failed:
                 case AutoTaskState.Canceled:
-                case AutoTaskState.Idle:   // Idle 안 쓰면 빼도 됨
+                case AutoTaskState.Idle:
                     btnAutoTaskRun.Enabled = true;
                     btnAutoTaskStop.Enabled = false;
 
@@ -1709,5 +1709,7 @@ namespace SKAIChips_Verification_Tool
                     break;
             }
         }
+
+        #endregion
     }
 }

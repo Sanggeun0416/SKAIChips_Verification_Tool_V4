@@ -4,15 +4,27 @@ using SKAIChips_Verification_Tool.Core;
 
 namespace SKAIChips_Verification_Tool.Infra
 {
-    public class Ft4222I2cBus : IBus, IDisposable
+    public sealed class Ft4222I2cBus : IBus, IDisposable
     {
+        #region Fields
+
         private IntPtr _handle = IntPtr.Zero;
         private bool _isConnected;
+        private bool _disposed;
+
         private readonly ushort _slaveAddress;
         private readonly uint _deviceIndex;
         private readonly ushort _speedKbps;
 
-        public bool IsConnected => _isConnected;
+        #endregion
+
+        #region Properties
+
+        public bool IsConnected => _isConnected && !_disposed;
+
+        #endregion
+
+        #region Constructors
 
         public Ft4222I2cBus(uint deviceIndex, ushort slaveAddress, ushort speedKbps)
         {
@@ -21,8 +33,15 @@ namespace SKAIChips_Verification_Tool.Infra
             _speedKbps = speedKbps;
         }
 
+        #endregion
+
+        #region Connection
+
         public bool Connect()
         {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(Ft4222I2cBus));
+
             if (_isConnected)
                 return true;
 
@@ -58,12 +77,23 @@ namespace SKAIChips_Verification_Tool.Infra
             _isConnected = false;
         }
 
+        #endregion
+
+        #region IO
+
         public void WriteBytes(byte[] data)
         {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(Ft4222I2cBus));
+
             if (!_isConnected)
                 throw new InvalidOperationException("FT4222 not connected.");
 
+            if (data == null || data.Length == 0)
+                return;
+
             ushort transferred = 0;
+
             var status = FT4222_I2CMaster_Write(
                 _handle,
                 _slaveAddress,
@@ -77,10 +107,16 @@ namespace SKAIChips_Verification_Tool.Infra
 
         public byte[] ReadBytes(int length)
         {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(Ft4222I2cBus));
+
             if (!_isConnected)
                 throw new InvalidOperationException("FT4222 not connected.");
 
-            byte[] buffer = new byte[length];
+            if (length <= 0)
+                return Array.Empty<byte>();
+
+            var buffer = new byte[length];
             ushort transferred = 0;
 
             var status = FT4222_I2CMaster_Read(
@@ -96,10 +132,22 @@ namespace SKAIChips_Verification_Tool.Infra
             return buffer;
         }
 
+        #endregion
+
+        #region Dispose
+
         public void Dispose()
         {
+            if (_disposed)
+                return;
+
             Disconnect();
+            _disposed = true;
         }
+
+        #endregion
+
+        #region Native
 
         private enum FT_STATUS : uint
         {
@@ -157,5 +205,7 @@ namespace SKAIChips_Verification_Tool.Infra
             byte[] buffer,
             ushort sizeToTransfer,
             ref ushort sizeTransferred);
+
+        #endregion
     }
 }

@@ -8,7 +8,13 @@ namespace SKAIChips_Verification_Tool
 {
     public partial class FtdiSetupForm : Form
     {
+        #region Properties
+
         public FtdiDeviceSettings Result { get; private set; }
+
+        #endregion
+
+        #region Constructors
 
         public FtdiSetupForm(FtdiDeviceSettings current = null)
         {
@@ -19,6 +25,10 @@ namespace SKAIChips_Verification_Tool
                 ApplyCurrent(current);
         }
 
+        #endregion
+
+        #region Event Handlers
+
         private void btnRefresh_Click(object sender, EventArgs e)
         {
             LoadDeviceList();
@@ -26,7 +36,7 @@ namespace SKAIChips_Verification_Tool
 
         private void btnOk_Click(object sender, EventArgs e)
         {
-            int idx = GetSelectedDeviceIndex();
+            var idx = GetSelectedDeviceIndex();
             if (idx < 0)
             {
                 MessageBox.Show("장치를 선택하세요.");
@@ -53,6 +63,10 @@ namespace SKAIChips_Verification_Tool
             Close();
         }
 
+        #endregion
+
+        #region Helpers
+
         private int GetSelectedDeviceIndex()
         {
             if (lvDevices.SelectedItems.Count == 0)
@@ -63,19 +77,19 @@ namespace SKAIChips_Verification_Tool
 
         private void ApplyCurrent(FtdiDeviceSettings current)
         {
-            for (int i = 0; i < lvDevices.Items.Count; i++)
+            for (var i = 0; i < lvDevices.Items.Count; i++)
             {
                 var item = lvDevices.Items[i];
-                if (int.TryParse(item.SubItems[0].Text, out int devIdx))
-                {
-                    if (devIdx == current.DeviceIndex)
-                    {
-                        item.Selected = true;
-                        item.Focused = true;
-                        lvDevices.EnsureVisible(i);
-                        break;
-                    }
-                }
+                if (!int.TryParse(item.SubItems[0].Text, out var devIdx))
+                    continue;
+
+                if (devIdx != current.DeviceIndex)
+                    continue;
+
+                item.Selected = true;
+                item.Focused = true;
+                lvDevices.EnsureVisible(i);
+                break;
             }
         }
 
@@ -97,9 +111,9 @@ namespace SKAIChips_Verification_Tool
                 uint type = 0;
                 uint id = 0;
                 uint locId = 0;
-                byte[] serial = new byte[16];
-                byte[] desc = new byte[64];
-                IntPtr handle = IntPtr.Zero;
+                var serial = new byte[16];
+                var desc = new byte[64];
+                var handle = IntPtr.Zero;
 
                 status = FT_GetDeviceInfoDetail(
                     i,
@@ -114,9 +128,9 @@ namespace SKAIChips_Verification_Tool
                 if (status != FT_STATUS.FT_OK)
                     continue;
 
-                string serialStr = BytesToString(serial);
-                string descStr = BytesToString(desc);
-                string locStr = $"0x{locId:X8}";
+                var serialStr = BytesToString(serial);
+                var descStr = BytesToString(desc);
+                var locStr = $"0x{locId:X8}";
 
                 var lvi = new ListViewItem(i.ToString());
                 lvi.SubItems.Add(descStr);
@@ -132,14 +146,20 @@ namespace SKAIChips_Verification_Tool
 
         private static string BytesToString(byte[] buf)
         {
+            if (buf == null || buf.Length == 0)
+                return string.Empty;
+
             var s = Encoding.ASCII.GetString(buf);
-            int idx = s.IndexOf('\0');
+            var idx = s.IndexOf('\0');
             if (idx >= 0)
                 s = s.Substring(0, idx);
+
             return s.Trim();
         }
 
-        // ===== FTDI P/Invoke =====
+        #endregion
+
+        #region Native
 
         private enum FT_STATUS : uint
         {
@@ -178,5 +198,7 @@ namespace SKAIChips_Verification_Tool
             [Out] byte[] serialNumber,
             [Out] byte[] description,
             ref IntPtr ftHandle);
+
+        #endregion
     }
 }

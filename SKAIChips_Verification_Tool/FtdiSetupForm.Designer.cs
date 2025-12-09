@@ -5,6 +5,8 @@ namespace SKAIChips_Verification_Tool
 {
     partial class FtdiSetupForm
     {
+        #region Fields
+
         private System.ComponentModel.IContainer components = null;
         private ListView lvDevices;
         private ColumnHeader colIdx;
@@ -15,12 +17,21 @@ namespace SKAIChips_Verification_Tool
         private Button btnOk;
         private Button btnCancel;
 
+        #endregion
+
+        #region Dispose
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing && components != null)
                 components.Dispose();
+
             base.Dispose(disposing);
         }
+
+        #endregion
+
+        #region InitializeComponent
 
         private void InitializeComponent()
         {
@@ -117,5 +128,7 @@ namespace SKAIChips_Verification_Tool
             Text = "FTDI Device Setup";
             ResumeLayout(false);
         }
+
+        #endregion
     }
 }

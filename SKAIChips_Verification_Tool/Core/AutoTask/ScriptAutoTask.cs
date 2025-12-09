@@ -6,8 +6,14 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
 {
     public sealed class ScriptAutoTask : IAutoTask
     {
+        #region Properties
+
         public string Name { get; }
         public AutoTaskDefinition Definition { get; }
+
+        #endregion
+
+        #region Constructors
 
         public ScriptAutoTask(string name)
         {
@@ -21,13 +27,15 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
             Name = string.IsNullOrWhiteSpace(definition.Name) ? "AutoTask" : definition.Name;
         }
 
+        #endregion
+
+        #region Methods
+
         public Task ExecuteAsync(
             AutoTaskContext context,
             IProgress<AutoTaskProgress> progress,
-            CancellationToken token)
-        {
-            return ExecuteInternalAsync(context, progress, token);
-        }
+            CancellationToken token) =>
+            ExecuteInternalAsync(context, progress, token);
 
         private async Task ExecuteInternalAsync(
             AutoTaskContext context,
@@ -38,7 +46,7 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
                 context = new AutoTaskContext();
 
             var blocks = Definition?.Blocks;
-            int totalSteps = blocks?.Count ?? 0;
+            var totalSteps = blocks?.Count ?? 0;
 
             progress?.Report(new AutoTaskProgress(
                 AutoTaskState.Running,
@@ -48,12 +56,12 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
 
             if (blocks != null)
             {
-                for (int i = 0; i < blocks.Count; i++)
+                for (var i = 0; i < blocks.Count; i++)
                 {
                     token.ThrowIfCancellationRequested();
 
                     var block = blocks[i];
-                    string msg = block?.Title ?? $"Step {i + 1}";
+                    var msg = block?.Title ?? $"Step {i + 1}";
 
                     try
                     {
@@ -93,5 +101,7 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
                 totalSteps,
                 "Completed"));
         }
+
+        #endregion
     }
 }

@@ -5,6 +5,8 @@ namespace SKAIChips_Verification_Tool
 {
     partial class MainForm
     {
+        #region Fields
+
         private System.ComponentModel.IContainer components = null;
         private MenuStrip menuStrip1;
         private ToolStripMenuItem menuFile;
@@ -14,12 +16,21 @@ namespace SKAIChips_Verification_Tool
         private ToolStripMenuItem menuSetup;
         private ToolStripMenuItem menuSetupInstrument;
 
+        #endregion
+
+        #region Dispose
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing && components != null)
                 components.Dispose();
+
             base.Dispose(disposing);
         }
+
+        #endregion
+
+        #region InitializeComponent
 
         private void InitializeComponent()
         {
@@ -102,5 +113,7 @@ namespace SKAIChips_Verification_Tool
             ResumeLayout(false);
             PerformLayout();
         }
+
+        #endregion
     }
 }

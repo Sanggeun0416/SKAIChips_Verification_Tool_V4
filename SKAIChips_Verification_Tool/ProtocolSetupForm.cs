@@ -14,7 +14,7 @@ namespace SKAIChips_Verification_Tool
 
         public ProtocolSetupForm(IChipProject project, ProtocolSettings current = null)
         {
-            _project = project;
+            _project = project ?? throw new ArgumentNullException(nameof(project));
 
             InitializeComponent();
             InitProtocolCombo();
@@ -24,6 +24,8 @@ namespace SKAIChips_Verification_Tool
             else
                 UpdateI2cControlsEnabled();
         }
+
+        #region Init / Apply
 
         private void InitProtocolCombo()
         {
@@ -38,7 +40,7 @@ namespace SKAIChips_Verification_Tool
 
         private void ApplyCurrent(ProtocolSettings current)
         {
-            for (int i = 0; i < comboProtocol.Items.Count; i++)
+            for (var i = 0; i < comboProtocol.Items.Count; i++)
             {
                 if (comboProtocol.Items[i] is ProtocolType pt && pt == current.ProtocolType)
                 {
@@ -59,20 +61,13 @@ namespace SKAIChips_Verification_Tool
             UpdateI2cControlsEnabled();
         }
 
+        #endregion
+
+        #region Event Handlers
+
         private void comboProtocol_SelectedIndexChanged(object sender, EventArgs e)
         {
             UpdateI2cControlsEnabled();
-        }
-
-        private void UpdateI2cControlsEnabled()
-        {
-            var selected = comboProtocol.SelectedItem;
-            bool isI2c = selected is ProtocolType pt && pt == ProtocolType.I2C;
-
-            lblSpeed.Enabled = isI2c;
-            numSpeed.Enabled = isI2c;
-            lblSlaveAddr.Enabled = isI2c;
-            txtSlaveAddr.Enabled = isI2c;
         }
 
         private void btnOk_Click(object sender, EventArgs e)
@@ -92,7 +87,7 @@ namespace SKAIChips_Verification_Tool
             {
                 settings.SpeedKbps = (int)numSpeed.Value;
 
-                if (!TryParseHexByte(txtSlaveAddr.Text, out byte slave))
+                if (!TryParseHexByte(txtSlaveAddr.Text, out var slave))
                 {
                     MessageBox.Show("I2C Slave Address 형식이 잘못되었습니다. 예: 0x52");
                     return;
@@ -112,7 +107,22 @@ namespace SKAIChips_Verification_Tool
             Close();
         }
 
-        private bool TryParseHexByte(string text, out byte value)
+        #endregion
+
+        #region Helpers
+
+        private void UpdateI2cControlsEnabled()
+        {
+            var selected = comboProtocol.SelectedItem;
+            var isI2c = selected is ProtocolType pt && pt == ProtocolType.I2C;
+
+            lblSpeed.Enabled = isI2c;
+            numSpeed.Enabled = isI2c;
+            lblSlaveAddr.Enabled = isI2c;
+            txtSlaveAddr.Enabled = isI2c;
+        }
+
+        private static bool TryParseHexByte(string text, out byte value)
         {
             value = 0;
 
@@ -122,9 +132,11 @@ namespace SKAIChips_Verification_Tool
             text = text.Trim();
 
             if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                text = text.Substring(2);
+                text = text[2..];
 
             return byte.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
         }
+
+        #endregion
     }
 }

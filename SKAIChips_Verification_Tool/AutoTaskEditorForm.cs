@@ -8,7 +8,13 @@ namespace SKAIChips_Verification_Tool
 {
     public partial class AutoTaskEditorForm : Form
     {
+        #region Fields
+
         private readonly AutoTaskDefinition _definition;
+
+        #endregion
+
+        #region Constructors
 
         public AutoTaskEditorForm(AutoTaskDefinition definition)
         {
@@ -24,9 +30,12 @@ namespace SKAIChips_Verification_Tool
             LoadFromDefinition();
         }
 
+        #endregion
+
+        #region Init
+
         private void InitGrid()
         {
-            // 타입 콤보 박스 항목
             var typeColumn = dgvBlocks.Columns["colType"] as DataGridViewComboBoxColumn;
             if (typeColumn != null)
             {
@@ -48,7 +57,7 @@ namespace SKAIChips_Verification_Tool
 
             foreach (var block in _definition.Blocks)
             {
-                int rowIndex = dgvBlocks.Rows.Add();
+                var rowIndex = dgvBlocks.Rows.Add();
                 var row = dgvBlocks.Rows[rowIndex];
 
                 if (block is DelayBlock d)
@@ -74,9 +83,13 @@ namespace SKAIChips_Verification_Tool
             }
         }
 
+        #endregion
+
+        #region Event Handlers
+
         private void btnAdd_Click(object sender, EventArgs e)
         {
-            int index = dgvBlocks.Rows.Add();
+            var index = dgvBlocks.Rows.Add();
             var row = dgvBlocks.Rows[index];
             row.Cells["colType"].Value = "Delay";
             row.Cells["colDelay"].Value = "1000";
@@ -100,7 +113,7 @@ namespace SKAIChips_Verification_Tool
                 return;
 
             var row = dgvBlocks.SelectedRows[0];
-            int idx = row.Index;
+            var idx = row.Index;
             if (idx <= 0)
                 return;
 
@@ -114,7 +127,7 @@ namespace SKAIChips_Verification_Tool
                 return;
 
             var row = dgvBlocks.SelectedRows[0];
-            int idx = row.Index;
+            var idx = row.Index;
             if (idx < 0 || idx >= dgvBlocks.Rows.Count - 1)
                 return;
 
@@ -145,6 +158,10 @@ namespace SKAIChips_Verification_Tool
             Close();
         }
 
+        #endregion
+
+        #region Helpers
+
         private List<AutoBlockBase> BuildBlocksFromGrid()
         {
             var list = new List<AutoBlockBase>();
@@ -154,17 +171,17 @@ namespace SKAIChips_Verification_Tool
                 if (row.IsNewRow)
                     continue;
 
-                string type = row.Cells["colType"].Value as string;
+                var type = row.Cells["colType"].Value as string;
                 if (string.IsNullOrWhiteSpace(type))
                     continue;
 
-                string title = row.Cells["colTitle"].Value as string;
+                var title = row.Cells["colTitle"].Value as string;
 
                 switch (type)
                 {
                     case "Delay":
                         {
-                            int ms = 0;
+                            var ms = 0;
                             var cellVal = row.Cells["colDelay"].Value;
                             if (cellVal != null &&
                                 int.TryParse(cellVal.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
@@ -183,11 +200,13 @@ namespace SKAIChips_Verification_Tool
 
                     case "RegWrite":
                         {
-                            uint addr = ParseHex(row.Cells["colAddr"].Value);
-                            uint value = ParseHex(row.Cells["colValue"].Value);
+                            var addr = ParseHex(row.Cells["colAddr"].Value);
+                            var value = ParseHex(row.Cells["colValue"].Value);
 
-                            var block = new RegWriteBlock(addr, value);
-                            block.Title = string.IsNullOrWhiteSpace(title) ? "RegWrite" : title;
+                            var block = new RegWriteBlock(addr, value)
+                            {
+                                Title = string.IsNullOrWhiteSpace(title) ? "RegWrite" : title
+                            };
 
                             list.Add(block);
                             break;
@@ -195,14 +214,16 @@ namespace SKAIChips_Verification_Tool
 
                     case "RegRead":
                         {
-                            uint addr = ParseHex(row.Cells["colAddr"].Value);
-                            string key = row.Cells["colValue"].Value as string;
+                            var addr = ParseHex(row.Cells["colAddr"].Value);
+                            var key = row.Cells["colValue"].Value as string;
                             if (string.IsNullOrWhiteSpace(key))
                                 key = "LastReadValue";
 
-                            var block = new RegReadBlock(addr);
-                            block.Title = string.IsNullOrWhiteSpace(title) ? "RegRead" : title;
-                            block.ResultKey = key;
+                            var block = new RegReadBlock(addr)
+                            {
+                                Title = string.IsNullOrWhiteSpace(title) ? "RegRead" : title,
+                                ResultKey = key
+                            };
 
                             list.Add(block);
                             break;
@@ -218,7 +239,7 @@ namespace SKAIChips_Verification_Tool
             if (cellValue == null)
                 return 0;
 
-            string text = cellValue.ToString().Trim();
+            var text = cellValue.ToString().Trim();
             if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 text = text.Substring(2);
 
@@ -227,5 +248,7 @@ namespace SKAIChips_Verification_Tool
 
             return 0;
         }
+
+        #endregion
     }
 }

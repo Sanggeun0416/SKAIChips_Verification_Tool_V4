@@ -5,6 +5,8 @@ namespace SKAIChips_Verification_Tool
 {
     partial class InstrumentForm
     {
+        #region Fields
+
         private System.ComponentModel.IContainer components = null;
 
         private TableLayoutPanel tableLayoutPanel_Instrument;
@@ -28,12 +30,21 @@ namespace SKAIChips_Verification_Tool
         private Button button_ClearInsLog;
         private RichTextBox richTextBox_InsCommandLog;
 
+        #endregion
+
+        #region Dispose
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing && components != null)
                 components.Dispose();
+
             base.Dispose(disposing);
         }
+
+        #endregion
+
+        #region InitializeComponent
 
         private void InitializeComponent()
         {
@@ -121,7 +132,14 @@ namespace SKAIChips_Verification_Tool
             dataGridView_InsList.AllowUserToResizeColumns = false;
             dataGridView_InsList.AllowUserToResizeRows = false;
             dataGridView_InsList.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridView_InsList.Columns.AddRange(new DataGridViewColumn[] { Column_InsType, Column_InsEnabled, Column_Address, Column_InsTest, Column_InsName });
+            dataGridView_InsList.Columns.AddRange(new DataGridViewColumn[]
+            {
+                Column_InsType,
+                Column_InsEnabled,
+                Column_Address,
+                Column_InsTest,
+                Column_InsName
+            });
             dataGridView_InsList.Location = new Point(6, 49);
             dataGridView_InsList.Name = "dataGridView_InsList";
             dataGridView_InsList.RowHeadersVisible = false;
@@ -285,5 +303,7 @@ namespace SKAIChips_Verification_Tool
             groupBox_InsCommand.PerformLayout();
             ResumeLayout(false);
         }
+
+        #endregion
     }
 }

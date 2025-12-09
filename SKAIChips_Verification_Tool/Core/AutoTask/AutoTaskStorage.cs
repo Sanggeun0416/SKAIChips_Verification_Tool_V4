@@ -4,20 +4,21 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
-using SKAIChips_Verification_Tool.Core.AutoTask;
 
 namespace SKAIChips_Verification_Tool.Core.AutoTask
 {
+    #region DTOs
+
     public class AutoTaskProjectFile
     {
         public string ProjectName { get; set; }
-        public List<AutoTaskFileItem> Tasks { get; set; } = new();
+        public List<AutoTaskFileItem> Tasks { get; set; } = new List<AutoTaskFileItem>();
     }
 
     public class AutoTaskFileItem
     {
         public string Name { get; set; }
-        public List<AutoTaskStepFile> Steps { get; set; } = new();
+        public List<AutoTaskStepFile> Steps { get; set; } = new List<AutoTaskStepFile>();
     }
 
     public class AutoTaskStepFile
@@ -30,30 +31,37 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
         public int DelayMs { get; set; }
     }
 
+    #endregion
+
     public static class AutoTaskStorage
     {
+        #region Path Helpers
+
         private static string GetFolderPath()
         {
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string dir = Path.Combine(baseDir, "AutoTasks");
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var dir = Path.Combine(baseDir, "AutoTasks");
+
             if (!Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
+
             return dir;
         }
 
         private static string GetFilePath(string projectName)
         {
-            string safeName = string.IsNullOrWhiteSpace(projectName)
+            var safeName = string.IsNullOrWhiteSpace(projectName)
                 ? "UnknownProject"
                 : projectName.Replace(" ", "_");
 
-            return Path.Combine(GetFolderPath(), $"{safeName}_AutoTasks.json");
+            return Path.Combine(GetFolderPath(), safeName + "_AutoTasks.json");
         }
 
-        private static string ToHex8(uint v)
-        {
-            return $"0x{v:X8}";
-        }
+        #endregion
+
+        #region Value Helpers
+
+        private static string ToHex8(uint v) => "0x" + v.ToString("X8");
 
         private static uint ParseHex(string text)
         {
@@ -61,14 +69,20 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
                 return 0;
 
             text = text.Trim();
+
             if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 text = text.Substring(2);
 
-            if (uint.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var v))
+            uint v;
+            if (uint.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out v))
                 return v;
 
             return 0;
         }
+
+        #endregion
+
+        #region Save
 
         public static void Save(string projectName, IEnumerable<ScriptAutoTask> tasks)
         {
@@ -81,7 +95,8 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
             {
                 foreach (var t in tasks)
                 {
-                    if (t == null) continue;
+                    if (t == null)
+                        continue;
 
                     var item = new AutoTaskFileItem
                     {
@@ -89,15 +104,16 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
                     };
 
                     var def = t.Definition;
-                    if (def?.Blocks != null)
+                    if (def != null && def.Blocks != null)
                     {
                         foreach (var block in def.Blocks)
                         {
-                            if (block == null) continue;
+                            if (block == null)
+                                continue;
 
                             var step = new AutoTaskStepFile
                             {
-                                Title = block.Title ?? ""
+                                Title = block.Title ?? string.Empty
                             };
 
                             if (block is DelayBlock d)
@@ -137,29 +153,33 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
                 WriteIndented = true
             };
 
-            string json = JsonSerializer.Serialize(file, options);
+            var json = JsonSerializer.Serialize(file, options);
             File.WriteAllText(GetFilePath(projectName), json, Encoding.UTF8);
         }
+
+        #endregion
+
+        #region Load
 
         public static List<ScriptAutoTask> Load(string projectName)
         {
             var result = new List<ScriptAutoTask>();
-            string path = GetFilePath(projectName);
+            var path = GetFilePath(projectName);
 
             if (!File.Exists(path))
                 return result;
 
             try
             {
-                string json = File.ReadAllText(path, Encoding.UTF8);
+                var json = File.ReadAllText(path, Encoding.UTF8);
                 var file = JsonSerializer.Deserialize<AutoTaskProjectFile>(json);
 
-                if (file?.Tasks == null)
+                if (file == null || file.Tasks == null)
                     return result;
 
                 foreach (var t in file.Tasks)
                 {
-                    if (string.IsNullOrWhiteSpace(t.Name))
+                    if (t == null || string.IsNullOrWhiteSpace(t.Name))
                         continue;
 
                     var task = new ScriptAutoTask(t.Name);
@@ -167,49 +187,48 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
 
                     def.Blocks.Clear();
 
-                    if (t.Steps != null)
+                    if (t.Steps == null)
                     {
-                        foreach (var s in t.Steps)
+                        result.Add(task);
+                        continue;
+                    }
+
+                    foreach (var s in t.Steps)
+                    {
+                        if (s == null || string.IsNullOrWhiteSpace(s.Type))
+                            continue;
+
+                        AutoBlockBase block = null;
+
+                        switch (s.Type)
                         {
-                            if (s == null || string.IsNullOrWhiteSpace(s.Type))
-                                continue;
+                            case "Delay":
+                                block = new DelayBlock
+                                {
+                                    Title = string.IsNullOrWhiteSpace(s.Title) ? "Delay" : s.Title,
+                                    Milliseconds = s.DelayMs
+                                };
+                                break;
 
-                            AutoBlockBase block = null;
+                            case "RegWrite":
+                                var addrW = ParseHex(s.Address);
+                                var valueW = ParseHex(s.Value);
+                                var bw = new RegWriteBlock(addrW, valueW);
+                                bw.Title = string.IsNullOrWhiteSpace(s.Title) ? "RegWrite" : s.Title;
+                                block = bw;
+                                break;
 
-                            switch (s.Type)
-                            {
-                                case "Delay":
-                                    block = new DelayBlock
-                                    {
-                                        Title = string.IsNullOrWhiteSpace(s.Title) ? "Delay" : s.Title,
-                                        Milliseconds = s.DelayMs
-                                    };
-                                    break;
-
-                                case "RegWrite":
-                                    {
-                                        uint addr = ParseHex(s.Address);
-                                        uint value = ParseHex(s.Value);
-                                        var b = new RegWriteBlock(addr, value);
-                                        b.Title = string.IsNullOrWhiteSpace(s.Title) ? "RegWrite" : s.Title;
-                                        block = b;
-                                        break;
-                                    }
-
-                                case "RegRead":
-                                    {
-                                        uint addr = ParseHex(s.Address);
-                                        var b = new RegReadBlock(addr);
-                                        b.Title = string.IsNullOrWhiteSpace(s.Title) ? "RegRead" : s.Title;
-                                        b.ResultKey = string.IsNullOrWhiteSpace(s.Value) ? "LastReadValue" : s.Value;
-                                        block = b;
-                                        break;
-                                    }
-                            }
-
-                            if (block != null)
-                                def.Blocks.Add(block);
+                            case "RegRead":
+                                var addrR = ParseHex(s.Address);
+                                var br = new RegReadBlock(addrR);
+                                br.Title = string.IsNullOrWhiteSpace(s.Title) ? "RegRead" : s.Title;
+                                br.ResultKey = string.IsNullOrWhiteSpace(s.Value) ? "LastReadValue" : s.Value;
+                                block = br;
+                                break;
                         }
+
+                        if (block != null)
+                            def.Blocks.Add(block);
                     }
 
                     result.Add(task);
@@ -221,5 +240,7 @@ namespace SKAIChips_Verification_Tool.Core.AutoTask
 
             return result;
         }
+
+        #endregion
     }
 }

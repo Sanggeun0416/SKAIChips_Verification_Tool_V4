@@ -5,6 +5,8 @@ namespace SKAIChips_Verification_Tool
 {
     partial class AutoTaskEditorForm
     {
+        #region Fields
+
         private System.ComponentModel.IContainer components = null;
 
         private DataGridView dgvBlocks;
@@ -21,12 +23,21 @@ namespace SKAIChips_Verification_Tool
         private DataGridViewTextBoxColumn colDelay;
         private DataGridViewTextBoxColumn colTitle;
 
+        #endregion
+
+        #region Dispose
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing && components != null)
                 components.Dispose();
+
             base.Dispose(disposing);
         }
+
+        #endregion
+
+        #region InitializeComponent
 
         private void InitializeComponent()
         {
@@ -177,5 +188,7 @@ namespace SKAIChips_Verification_Tool
             ((System.ComponentModel.ISupportInitialize)dgvBlocks).EndInit();
             ResumeLayout(false);
         }
+
+        #endregion
     }
 }

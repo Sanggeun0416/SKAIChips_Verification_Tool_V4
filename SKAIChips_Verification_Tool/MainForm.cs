@@ -6,7 +6,7 @@ namespace SKAIChips_Verification_Tool
     public partial class MainForm : Form
     {
         private RegisterControlForm _regForm;
-        private InstrumentForm _instrumentForm;   // ¡ç Ãß°¡
+        private InstrumentForm _instrumentForm;
 
         public MainForm()
         {
@@ -22,9 +22,11 @@ namespace SKAIChips_Verification_Tool
         {
             if (_regForm == null || _regForm.IsDisposed)
             {
-                _regForm = new RegisterControlForm();
-                _regForm.MdiParent = this;
-                _regForm.WindowState = FormWindowState.Maximized;
+                _regForm = new RegisterControlForm
+                {
+                    MdiParent = this,
+                    WindowState = FormWindowState.Maximized
+                };
                 _regForm.Show();
             }
             else
@@ -46,7 +48,6 @@ namespace SKAIChips_Verification_Tool
                 {
                     StartPosition = FormStartPosition.CenterParent
                 };
-
                 _instrumentForm.Show(this);
             }
             else
