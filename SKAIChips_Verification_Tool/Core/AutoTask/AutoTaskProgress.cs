@@ -1,13 +1,18 @@
-﻿using System;
-
-namespace SKAIChips_Verification_Tool.Core.AutoTask
+﻿namespace SKAIChips_Verification_Tool.Core.AutoTask
 {
     public class AutoTaskProgress
     {
-        public AutoTaskState State { get; set; } = AutoTaskState.Idle;
-        public int CurrentStep { get; set; }
-        public int TotalSteps { get; set; }
-        public string Message { get; set; }
-        public Exception Error { get; set; }
+        public AutoTaskState State { get; }
+        public int CurrentStep { get; }
+        public int TotalSteps { get; }
+        public string Message { get; }
+
+        public AutoTaskProgress(AutoTaskState state, int currentStep, int totalSteps, string message)
+        {
+            State = state;
+            CurrentStep = currentStep;
+            TotalSteps = totalSteps;
+            Message = message;
+        }
     }
 }

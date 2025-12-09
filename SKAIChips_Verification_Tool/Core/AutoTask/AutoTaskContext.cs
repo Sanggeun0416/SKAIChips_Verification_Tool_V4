@@ -1,23 +1,30 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace SKAIChips_Verification_Tool.Core.AutoTask
 {
-    public class AutoTaskContext
+    public sealed class AutoTaskContext
     {
-        // 나중에 여기다가 Chip, InstrumentManager, Logger 넣을 예정
-        public CancellationToken CancellationToken { get; }
+        public IDictionary<string, object> Variables { get; }
 
-        public Dictionary<string, object> Variables { get; } =
-            new Dictionary<string, object>();
+        // ★ UI 쪽에서 주입할 콜백
+        // type: "READ"/"WRITE" 등, addr/data/result는 문자열 그대로 AddLog에 쓸 형태
+        public Action<string, string, string, string> LogCallback { get; set; }
+
+        // addr: 레지스터 주소, value: 읽거나 쓴 값
+        public Action<uint, uint> RegisterUpdatedCallback { get; set; }
 
         public AutoTaskContext()
         {
+            Variables = new Dictionary<string, object>();
         }
 
-        public AutoTaskContext(CancellationToken token)
+        public T Get<T>(string key) where T : class
         {
-            CancellationToken = token;
+            if (Variables.TryGetValue(key, out var obj))
+                return obj as T;
+            return null;
         }
     }
 }

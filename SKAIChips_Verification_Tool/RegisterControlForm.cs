@@ -2,7 +2,7 @@ using ClosedXML.Excel;
 using SKAIChips_Verification_Tool.Chips;
 using SKAIChips_Verification_Tool.Core;
 using SKAIChips_Verification_Tool.Infra;
-using SKAIChips_Verification_Tool.Core.AutoTask;   // ★ 추가
+using SKAIChips_Verification_Tool.Core.AutoTask;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -40,9 +40,9 @@ namespace SKAIChips_Verification_Tool
         private bool _isUpdatingBits;
 
         private readonly Dictionary<Register, uint> _regValues = new();
+        private readonly Dictionary<uint, Register> _addrToRegister = new();
 
-        // ★ AutoTask 정의 목록
-        private readonly List<IAutoTask> _autoTasks = new();
+        private readonly List<ScriptAutoTask> _autoTasks = new();
 
         public RegisterControlForm()
         {
@@ -83,6 +83,9 @@ namespace SKAIChips_Verification_Tool
                 dgvBits.Columns.Add(colDefault);
                 dgvBits.Columns.Add(colCurrent);
                 dgvBits.Columns.Add(colDesc);
+
+                // ★ CellEndEdit 연결
+                dgvBits.CellEndEdit += dgvBits_CellEndEdit;
             }
 
             lblMapFileName.Text = "(No file)";
@@ -145,13 +148,12 @@ namespace SKAIChips_Verification_Tool
             if (comboAutoTask == null)
                 return;
 
-            comboAutoTask.Items.Clear();
             _autoTasks.Clear();
+            comboAutoTask.Items.Clear();
 
-            // 일단은 DummyAutoTask 하나만 등록
-            var dummy = new DummyAutoTask("Dummy Task");
-            _autoTasks.Add(dummy);
-            comboAutoTask.Items.Add(dummy.Name);
+            var task = new ScriptAutoTask("Task1");
+            _autoTasks.Add(task);
+            comboAutoTask.Items.Add(task.Name);
 
             if (comboAutoTask.Items.Count > 0)
                 comboAutoTask.SelectedIndex = 0;
@@ -276,6 +278,46 @@ namespace SKAIChips_Verification_Tool
                     return child;
             }
             return null;
+        }
+
+        private void dgvBits_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0)
+                return;
+
+            if (dgvBits.Columns[e.ColumnIndex].Name != "colCurrent")
+                return;
+
+            if (_selectedRegister == null)
+                return;
+
+            uint newValue = _currentRegValue;
+
+            foreach (DataGridViewRow r in dgvBits.Rows)
+            {
+                if (r.Tag is not RegisterItem item)
+                    continue;
+
+                var cell = r.Cells["colCurrent"].Value;
+                if (cell == null)
+                    continue;
+
+                string text = cell.ToString();
+                if (string.IsNullOrWhiteSpace(text))
+                    continue;
+
+                int width = item.UpperBit - item.LowerBit + 1;
+                if (!TryParseFieldValue(text, width, out uint fieldVal))
+                    continue;
+
+                uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << item.LowerBit;
+
+                newValue &= ~mask;
+                newValue |= (fieldVal << item.LowerBit);
+            }
+
+            _currentRegValue = newValue;
+            UpdateBitCurrentValues();  // txtRegValueHex, 비트 버튼, dgvBits Current, numRegIndex 다 같이 갱신
         }
 
         private void UpdateBitButtonLayout()
@@ -509,6 +551,54 @@ namespace SKAIChips_Verification_Tool
             row.Cells["colResult"].Value = result;
 
             dgvLog.FirstDisplayedScrollingRowIndex = rowIndex;
+        }
+
+        // 현재 선택된 프로젝트 기준으로 AutoTask 로드
+        private void LoadAutoTasksForCurrentProject()
+        {
+            if (comboAutoTask == null)
+                return;
+
+            comboAutoTask.Items.Clear();
+            _autoTasks.Clear();
+
+            if (_selectedProject == null)
+            {
+                lblAutoTaskStatus.Text = "AutoTask: No Project";
+                return;
+            }
+
+            var tasks = AutoTaskStorage.Load(_selectedProject.Name);
+            if (tasks == null || tasks.Count == 0)
+            {
+                // JSON 없으면 기본 Task 하나 생성
+                var defaultTask = new ScriptAutoTask("Task1");
+                _autoTasks.Add(defaultTask);
+                comboAutoTask.Items.Add(defaultTask.Name);
+                comboAutoTask.SelectedIndex = 0;
+                lblAutoTaskStatus.Text = "AutoTask: New Task1 (no JSON)";
+                return;
+            }
+
+            foreach (var t in tasks)
+            {
+                _autoTasks.Add(t);
+                comboAutoTask.Items.Add(t.Name);
+            }
+
+            if (comboAutoTask.Items.Count > 0)
+                comboAutoTask.SelectedIndex = 0;
+
+            lblAutoTaskStatus.Text = $"AutoTask: Loaded ({tasks.Count})";
+        }
+
+        // 현재 선택된 프로젝트 기준으로 AutoTask 저장
+        private void SaveAutoTasksForCurrentProject()
+        {
+            if (_selectedProject == null)
+                return;
+
+            AutoTaskStorage.Save(_selectedProject.Name, _autoTasks);
         }
 
         private void DisconnectBus()
@@ -939,6 +1029,7 @@ namespace SKAIChips_Verification_Tool
         private void BuildRegisterTree()
         {
             tvRegs.Nodes.Clear();
+            _addrToRegister.Clear();   // ★ 추가
 
             foreach (var g in _groups)
             {
@@ -953,6 +1044,9 @@ namespace SKAIChips_Verification_Tool
                     {
                         Tag = reg
                     };
+
+                    // ★ 주소 → Register 매핑
+                    _addrToRegister[reg.Address] = reg;
 
                     foreach (var item in reg.Items)
                     {
@@ -985,6 +1079,24 @@ namespace SKAIChips_Verification_Tool
             }
 
             tvRegs.EndUpdate();
+        }
+
+        private void OnRegisterUpdatedFromAutoTask(uint addr, uint value)
+        {
+            // 주소에 해당하는 Register 찾기
+            if (!_addrToRegister.TryGetValue(addr, out var reg))
+                return;
+
+            // 내부 값 업데이트
+            _regValues[reg] = value;
+
+            // 현재 선택된 레지스터가 아니면 여기까지만
+            if (!ReferenceEquals(reg, _selectedRegister))
+                return;
+
+            // 현재 선택 레지스터면 UI 싹 갱신
+            _currentRegValue = value;
+            UpdateBitCurrentValues();   // txtRegValueHex, dgvBits Current, 비트 버튼, numRegIndex 모두 갱신
         }
 
         private uint GetRegisterValue(Register reg)
@@ -1397,6 +1509,9 @@ namespace SKAIChips_Verification_Tool
 
             _protocolSettings = null;
             UpdateStatusText();
+
+            // ★ 프로젝트 바뀔 때 AutoTask 로드
+            LoadAutoTasksForCurrentProject();
         }
 
         private void btnFtdiSetup_Click(object sender, EventArgs e)
@@ -1450,16 +1565,39 @@ namespace SKAIChips_Verification_Tool
 
             var task = _autoTasks[comboAutoTask.SelectedIndex];
 
-            // 필요하면 여기서 Chip, Bus, Instrument 등 컨텍스트에 넣으면 됨
             var context = new AutoTaskContext();
             context.Variables["Chip"] = _chip;
             context.Variables["Bus"] = _bus;
 
+            // ★ AutoTask → Register Control Log로 로그 보내는 콜백
+            context.LogCallback = (type, addr, data, result) =>
+            {
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action(() => AddLog(type, addr, data, result)));
+                }
+                else
+                {
+                    AddLog(type, addr, data, result);
+                }
+            };
+
+            // ★ AutoTask → 현재 선택된 레지스터 UI 갱신 콜백
+            context.RegisterUpdatedCallback = (addr, value) =>
+            {
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action(() => OnRegisterUpdatedFromAutoTask(addr, value)));
+                }
+                else
+                {
+                    OnRegisterUpdatedFromAutoTask(addr, value);
+                }
+            };
+
             bool started = AutoTaskManager.Instance.TryStart(task, context);
             if (!started)
-            {
                 MessageBox.Show("AutoTask 시작에 실패했습니다.");
-            }
         }
 
         private void btnAutoTaskStop_Click(object sender, EventArgs e)
@@ -1472,8 +1610,26 @@ namespace SKAIChips_Verification_Tool
 
         private void btnAutoTaskEdit_Click(object sender, EventArgs e)
         {
-            // 나중에 블럭 에디터 폼 연결 예정
-            MessageBox.Show("AutoTask Editor는 아직 구현되지 않았습니다.");
+            if (comboAutoTask.SelectedIndex < 0 ||
+                comboAutoTask.SelectedIndex >= _autoTasks.Count)
+            {
+                MessageBox.Show("편집할 AutoTask를 선택하세요.");
+                return;
+            }
+
+            var task = _autoTasks[comboAutoTask.SelectedIndex];
+
+            using (var dlg = new AutoTaskEditorForm(task.Definition))
+            {
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    // 이름 바꾸는 기능을 나중에 추가하면 여기서 combo 텍스트도 갱신
+                    comboAutoTask.Items[comboAutoTask.SelectedIndex] = task.Name;
+
+                    // ★ 편집 끝난 시점에 JSON 저장
+                    SaveAutoTasksForCurrentProject();
+                }
+            }
         }
 
         private void AutoTaskManager_ProgressChanged(object sender, AutoTaskProgress e)
@@ -1484,22 +1640,30 @@ namespace SKAIChips_Verification_Tool
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(e.Message))
-                lblAutoTaskStatus.Text = e.Message;
-            else
-                lblAutoTaskStatus.Text = e.State.ToString();
+            // 상태 텍스트 구성 (State + Step + Message)
+            string status = e.State.ToString();
 
             if (e.TotalSteps > 0)
+                status += $"  ({e.CurrentStep}/{e.TotalSteps})";
+
+            if (!string.IsNullOrWhiteSpace(e.Message))
+                status += $"  -  {e.Message}";
+
+            lblAutoTaskStatus.Text = status;
+
+            // 프로그레스 바
+            if (e.TotalSteps > 0)
             {
+                progressAutoTask.Style = ProgressBarStyle.Continuous;
+
                 int pct = (int)(e.CurrentStep * 100.0 / e.TotalSteps);
                 if (pct < 0) pct = 0;
                 if (pct > 100) pct = 100;
-                progressAutoTask.Style = ProgressBarStyle.Continuous;
+
                 progressAutoTask.Value = pct;
             }
             else
             {
-                // 총 스텝 정보가 없으면 그냥 마퀴 스타일로
                 if (e.State == AutoTaskState.Running)
                 {
                     progressAutoTask.Style = ProgressBarStyle.Marquee;
@@ -1511,6 +1675,18 @@ namespace SKAIChips_Verification_Tool
                 }
             }
 
+            // 로그 그리드에 한 줄 추가 (열 이름은 너가 만든 걸로 맞춰서 쓰면 됨)
+            int row = dgvAutoTaskLog.Rows.Add();
+            var r = dgvAutoTaskLog.Rows[row];
+
+            r.Cells["colAutoTime"].Value = DateTime.Now.ToString("HH:mm:ss");
+            r.Cells["colAutoState"].Value = e.State.ToString();
+            r.Cells["colAutoStep"].Value = (e.TotalSteps > 0) ? $"{e.CurrentStep}/{e.TotalSteps}" : "";
+            r.Cells["colAutoMessage"].Value = e.Message;
+
+            dgvAutoTaskLog.FirstDisplayedScrollingRowIndex = row;
+
+            // 버튼 활성/비활성
             switch (e.State)
             {
                 case AutoTaskState.Running:
@@ -1521,10 +1697,15 @@ namespace SKAIChips_Verification_Tool
                 case AutoTaskState.Completed:
                 case AutoTaskState.Failed:
                 case AutoTaskState.Canceled:
+                case AutoTaskState.Idle:   // Idle 안 쓰면 빼도 됨
                     btnAutoTaskRun.Enabled = true;
                     btnAutoTaskStop.Enabled = false;
-                    if (e.State != AutoTaskState.Running && e.TotalSteps <= 0)
+
+                    if (e.TotalSteps <= 0)
+                    {
+                        progressAutoTask.Style = ProgressBarStyle.Continuous;
                         progressAutoTask.Value = 0;
+                    }
                     break;
             }
         }
