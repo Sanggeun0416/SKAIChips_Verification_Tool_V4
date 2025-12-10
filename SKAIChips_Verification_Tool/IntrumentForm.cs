@@ -10,6 +10,9 @@ using System.Windows.Forms;
 
 namespace SKAIChips_Verification_Tool
 {
+    /// <summary>
+    /// Manages instrument discovery, settings persistence, and SCPI command interactions.
+    /// </summary>
     public partial class InstrumentForm : Form
     {
         #region Fields / Properties
