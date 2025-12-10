@@ -50,6 +50,15 @@ namespace SKAIChips_Verification_Tool
         private CancellationTokenSource _testCts;
         private bool _isRunningTest;
 
+        // Test log status strip / progress / timer
+        private StatusStrip _testStatusStrip;
+        private ToolStripStatusLabel _testStatusLabel;
+        private ToolStripProgressBar _testProgressBar;
+        private ToolStripStatusLabel _testElapsedLabel;
+
+        private Timer _testTimer;
+        private DateTime _testStartTime;
+
         #endregion
 
         #region Constructor / Form lifecycle
@@ -96,7 +105,7 @@ namespace SKAIChips_Verification_Tool
             var colBit = new DataGridViewTextBoxColumn { Name = "colBit", HeaderText = "Bit", ReadOnly = true };
             var colName = new DataGridViewTextBoxColumn { Name = "colName", HeaderText = "Name", ReadOnly = true };
             var colDefault = new DataGridViewTextBoxColumn { Name = "colDefault", HeaderText = "Default", ReadOnly = true };
-            var colCurrent = new DataGridViewTextBoxColumn { Name = "colCurrent", HeaderText = "Current", ReadOnly = false };
+            var colCurrent = new DataGridViewTextBoxColumn { Name = "colCurrent", HeaderText = "", ReadOnly = false };
             var colDesc = new DataGridViewTextBoxColumn
             {
                 Name = "colDesc",
@@ -112,6 +121,10 @@ namespace SKAIChips_Verification_Tool
             dgvBits.Columns.Add(colDesc);
 
             dgvBits.CellEndEdit += dgvBits_CellEndEdit;
+
+            dgvBits.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells;
+            dgvBits.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            colDesc.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
         }
 
         private void InitTreeContextMenu()
@@ -269,11 +282,66 @@ namespace SKAIChips_Verification_Tool
             dgvTestLog.Columns.Add(colLevel);
             dgvTestLog.Columns.Add(colMessage);
 
+            dgvTestLog.AutoGenerateColumns = false;
+            dgvTestLog.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells;
+            dgvTestLog.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            colMessage.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+
             comboTestCategory.Items.Clear();
             comboTests.Items.Clear();
             btnRunTest.Enabled = false;
             btnStopTest.Enabled = false;
             dgvTestLog.Rows.Clear();
+
+            _testStatusStrip = new StatusStrip
+            {
+                Name = "statusStripTest",
+                Dock = DockStyle.Top
+            };
+
+            _testStatusLabel = new ToolStripStatusLabel
+            {
+                Name = "toolStripStatusLabelTestStatus",
+                Text = "Idle"
+            };
+
+            var spacer = new ToolStripStatusLabel
+            {
+                Spring = true
+            };
+
+            _testProgressBar = new ToolStripProgressBar
+            {
+                Name = "toolStripProgressBarTest",
+                Minimum = 0,
+                Maximum = 100,
+                Value = 0,
+                Style = ProgressBarStyle.Blocks
+            };
+
+            _testElapsedLabel = new ToolStripStatusLabel
+            {
+                Name = "toolStripStatusLabelElapsed",
+                Text = "Elapsed: 00:00",
+                TextAlign = ContentAlignment.MiddleRight
+            };
+
+            _testStatusStrip.Items.Add(_testStatusLabel);
+            _testStatusStrip.Items.Add(_testProgressBar);
+            _testStatusStrip.Items.Add(spacer);
+            _testStatusStrip.Items.Add(_testElapsedLabel);
+
+            if (dgvTestLog.Parent != null)
+            {
+                dgvTestLog.Parent.Controls.Add(_testStatusStrip);
+                _testStatusStrip.BringToFront();
+            }
+
+            _testTimer = new Timer
+            {
+                Interval = 500
+            };
+            _testTimer.Tick += TestTimer_Tick;
 
             comboTestCategory.SelectedIndexChanged += comboTestCategory_SelectedIndexChanged;
             btnRunTest.Click += btnRunTest_Click;
@@ -610,6 +678,26 @@ namespace SKAIChips_Verification_Tool
             btnStopTest.Enabled = true;
             dgvTestLog.Rows.Clear();
 
+            _testStartTime = DateTime.Now;
+
+            if (_testStatusLabel != null)
+            {
+                _testStatusLabel.Text = $"Running: {info.Name}";
+            }
+
+            if (_testProgressBar != null)
+            {
+                _testProgressBar.Style = ProgressBarStyle.Marquee;
+                _testProgressBar.MarqueeAnimationSpeed = 50;
+            }
+
+            if (_testElapsedLabel != null)
+            {
+                _testElapsedLabel.Text = "Elapsed: 00:00";
+            }
+
+            _testTimer?.Start();
+
             try
             {
                 await _testSuite.RunTestAsync(
@@ -648,6 +736,19 @@ namespace SKAIChips_Verification_Tool
                 _testCts?.Dispose();
                 _testCts = null;
 
+                _testTimer?.Stop();
+
+                if (_testProgressBar != null)
+                {
+                    _testProgressBar.Style = ProgressBarStyle.Blocks;
+                    _testProgressBar.Value = 0;
+                }
+
+                if (_testStatusLabel != null)
+                {
+                    _testStatusLabel.Text = "Idle";
+                }
+
                 btnRunTest.Enabled = _testSuite != null && comboTests.Items.Count > 0;
                 btnStopTest.Enabled = false;
             }
@@ -660,6 +761,28 @@ namespace SKAIChips_Verification_Tool
 
             _testCts?.Cancel();
             btnStopTest.Enabled = false;
+
+            _testTimer?.Stop();
+
+            if (_testProgressBar != null)
+            {
+                _testProgressBar.Style = ProgressBarStyle.Blocks;
+                _testProgressBar.Value = 0;
+            }
+
+            if (_testStatusLabel != null)
+            {
+                _testStatusLabel.Text = "Stopped";
+            }
+        }
+
+        private void TestTimer_Tick(object sender, EventArgs e)
+        {
+            if (!_isRunningTest)
+                return;
+
+            var elapsed = DateTime.Now - _testStartTime;
+            _testElapsedLabel.Text = $"Elapsed: {elapsed:hh\\:mm\\:ss}";
         }
 
         private void AddTestLogRow(string level, string message)
@@ -672,6 +795,8 @@ namespace SKAIChips_Verification_Tool
             row.Cells["colMessage"].Value = message;
 
             dgvTestLog.FirstDisplayedScrollingRowIndex = rowIndex;
+
+            dgvTestLog.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.AllCells);
         }
 
         #endregion
