@@ -49,7 +49,6 @@ namespace SKAIChips_Verification_Tool
         private IChipTestSuite _testSuite;
         private CancellationTokenSource _testCts;
         private bool _isRunningTest;
-        private DateTime _testStartTime;
 
         #endregion
 
@@ -97,7 +96,6 @@ namespace SKAIChips_Verification_Tool
             var colBit = new DataGridViewTextBoxColumn { Name = "colBit", HeaderText = "Bit", ReadOnly = true };
             var colName = new DataGridViewTextBoxColumn { Name = "colName", HeaderText = "Name", ReadOnly = true };
             var colDefault = new DataGridViewTextBoxColumn { Name = "colDefault", HeaderText = "Default", ReadOnly = true };
-            var colCurrent = new DataGridViewTextBoxColumn { Name = "colCurrent", HeaderText = "", ReadOnly = false };
             var colDesc = new DataGridViewTextBoxColumn
             {
                 Name = "colDesc",
@@ -109,10 +107,7 @@ namespace SKAIChips_Verification_Tool
             dgvBits.Columns.Add(colBit);
             dgvBits.Columns.Add(colName);
             dgvBits.Columns.Add(colDefault);
-            dgvBits.Columns.Add(colCurrent);
             dgvBits.Columns.Add(colDesc);
-
-            dgvBits.CellEndEdit += dgvBits_CellEndEdit;
 
             dgvBits.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells;
             dgvBits.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
@@ -284,20 +279,6 @@ namespace SKAIChips_Verification_Tool
             btnRunTest.Enabled = false;
             btnStopTest.Enabled = false;
             dgvTestLog.Rows.Clear();
-
-            if (toolStripStatusLabelTestStatus != null)
-                toolStripStatusLabelTestStatus.Text = "Idle";
-
-            if (toolStripProgressBarTest != null)
-            {
-                toolStripProgressBarTest.Minimum = 0;
-                toolStripProgressBarTest.Maximum = 100;
-                toolStripProgressBarTest.Value = 0;
-                toolStripProgressBarTest.Style = ProgressBarStyle.Blocks;
-            }
-
-            if (toolStripStatusLabelElapsed != null)
-                toolStripStatusLabelElapsed.Text = "Elapsed: 00:00";
 
             comboTestCategory.SelectedIndexChanged += comboTestCategory_SelectedIndexChanged;
             btnRunTest.Click += btnRunTest_Click;
@@ -532,28 +513,6 @@ namespace SKAIChips_Verification_Tool
             return uint.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
         }
 
-        private bool TryParseFieldValue(object cellValue, int width, out uint value)
-        {
-            value = 0;
-
-            if (cellValue == null)
-                return false;
-
-            string text = cellValue.ToString().Trim();
-
-            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                text = text.Substring(2);
-
-            if (!uint.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value))
-                return false;
-
-            uint max = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
-            if (value > max)
-                value = max;
-
-            return true;
-        }
-
         private void AddLog(string type, string addrText, string dataText, string result)
         {
             int rowIndex = dgvLog.Rows.Add();
@@ -634,26 +593,6 @@ namespace SKAIChips_Verification_Tool
             btnStopTest.Enabled = true;
             dgvTestLog.Rows.Clear();
 
-            _testStartTime = DateTime.Now;
-
-            if (toolStripStatusLabelTestStatus != null)
-            {
-                toolStripStatusLabelTestStatus.Text = $"Running: {info.Name}";
-            }
-
-            if (toolStripProgressBarTest != null)
-            {
-                toolStripProgressBarTest.Style = ProgressBarStyle.Marquee;
-                toolStripProgressBarTest.MarqueeAnimationSpeed = 50;
-            }
-
-            if (toolStripStatusLabelElapsed != null)
-            {
-                toolStripStatusLabelElapsed.Text = "Elapsed: 00:00";
-            }
-
-            testTimer?.Start();
-
             try
             {
                 await _testSuite.RunTestAsync(
@@ -692,20 +631,6 @@ namespace SKAIChips_Verification_Tool
                 _testCts?.Dispose();
                 _testCts = null;
 
-                testTimer?.Stop();
-
-                if (toolStripProgressBarTest != null)
-                {
-                    toolStripProgressBarTest.Style = ProgressBarStyle.Blocks;
-                    toolStripProgressBarTest.MarqueeAnimationSpeed = 0;
-                    toolStripProgressBarTest.Value = 0;
-                }
-
-                if (toolStripStatusLabelTestStatus != null)
-                {
-                    toolStripStatusLabelTestStatus.Text = "Idle";
-                }
-
                 btnRunTest.Enabled = _testSuite != null && comboTests.Items.Count > 0;
                 btnStopTest.Enabled = false;
             }
@@ -718,32 +643,6 @@ namespace SKAIChips_Verification_Tool
 
             _testCts?.Cancel();
             btnStopTest.Enabled = false;
-
-            testTimer?.Stop();
-
-            if (toolStripProgressBarTest != null)
-            {
-                toolStripProgressBarTest.Style = ProgressBarStyle.Blocks;
-                toolStripProgressBarTest.MarqueeAnimationSpeed = 0;
-                toolStripProgressBarTest.Value = 0;
-            }
-
-            if (toolStripStatusLabelTestStatus != null)
-            {
-                toolStripStatusLabelTestStatus.Text = "Stopped";
-            }
-        }
-
-        private void testTimer_Tick(object sender, EventArgs e)
-        {
-            if (!_isRunningTest)
-                return;
-
-            var elapsed = DateTime.Now - _testStartTime;
-            if (toolStripStatusLabelElapsed != null)
-            {
-                toolStripStatusLabelElapsed.Text = $"Elapsed: {elapsed:hh\\:mm\\:ss}";
-            }
         }
 
         private void AddTestLogRow(string level, string message)
@@ -979,46 +878,6 @@ namespace SKAIChips_Verification_Tool
         #endregion
 
         #region Bit / value editing
-
-        private void dgvBits_CellEndEdit(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0)
-                return;
-
-            if (dgvBits.Columns[e.ColumnIndex].Name != "colCurrent")
-                return;
-
-            if (_selectedRegister == null)
-                return;
-
-            uint newValue = _currentRegValue;
-
-            foreach (DataGridViewRow r in dgvBits.Rows)
-            {
-                if (r.Tag is not RegisterItem item)
-                    continue;
-
-                var cell = r.Cells["colCurrent"].Value;
-                if (cell == null)
-                    continue;
-
-                string text = cell.ToString();
-                if (string.IsNullOrWhiteSpace(text))
-                    continue;
-
-                int width = item.UpperBit - item.LowerBit + 1;
-                if (!TryParseFieldValue(text, width, out uint fieldVal))
-                    continue;
-
-                uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << item.LowerBit;
-
-                newValue &= ~mask;
-                newValue |= (fieldVal << item.LowerBit);
-            }
-
-            _currentRegValue = newValue;
-            UpdateBitCurrentValues();
-        }
 
         private void BitButton_Click(object sender, EventArgs e)
         {
@@ -1363,7 +1222,6 @@ namespace SKAIChips_Verification_Tool
                 row.Cells["colBit"].Value = bitText;
                 row.Cells["colName"].Value = item.Name;
                 row.Cells["colDefault"].Value = $"0x{item.DefaultValue:X}";
-                row.Cells["colCurrent"].Value = "";
                 row.Cells["colDesc"].Value = item.Description;
 
                 row.Tag = item;
@@ -1408,19 +1266,6 @@ namespace SKAIChips_Verification_Tool
 
         private void UpdateBitCurrentValues()
         {
-            for (int i = 0; i < dgvBits.Rows.Count; i++)
-            {
-                var row = dgvBits.Rows[i];
-                if (row.Tag is not RegisterItem item)
-                    continue;
-
-                int width = item.UpperBit - item.LowerBit + 1;
-                uint mask = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
-                uint fieldVal = (_currentRegValue >> item.LowerBit) & mask;
-
-                row.Cells["colCurrent"].Value = $"0x{fieldVal:X}";
-            }
-
             txtRegValueHex.Text = $"0x{_currentRegValue:X8}";
 
             if (_selectedRegister != null)
@@ -1769,55 +1614,8 @@ namespace SKAIChips_Verification_Tool
             uint addr = _selectedRegister.Address;
             uint newValue;
 
-            if (dgvBits.SelectedRows.Count > 0 && dgvBits.SelectedRows[0].Tag is RegisterItem selItem)
-            {
-                var row = dgvBits.SelectedRows[0];
-                int width = selItem.UpperBit - selItem.LowerBit + 1;
-
-                if (!TryParseFieldValue(row.Cells["colCurrent"].Value, width, out uint fieldVal))
-                {
-                    MessageBox.Show("Current 값 형식이 잘못되었습니다. 예: 0x1");
-                    return;
-                }
-
-                uint baseValue = _currentRegValue;
-                uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << selItem.LowerBit;
-                newValue = baseValue;
-                newValue &= ~mask;
-                newValue |= (fieldVal << selItem.LowerBit);
-            }
-            else if (_selectedRegister != null && dgvBits.Rows.Count > 0)
-            {
-                uint baseValue = _currentRegValue;
-                newValue = baseValue;
-
-                foreach (DataGridViewRow r in dgvBits.Rows)
-                {
-                    if (r.Tag is not RegisterItem item)
-                        continue;
-
-                    int width = item.UpperBit - item.LowerBit + 1;
-                    var cell = r.Cells["colCurrent"].Value;
-
-                    if (cell == null || string.IsNullOrWhiteSpace(cell.ToString()))
-                        continue;
-
-                    if (!TryParseFieldValue(cell, width, out uint fieldVal))
-                        continue;
-
-                    uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << item.LowerBit;
-                    newValue &= ~mask;
-                    newValue |= (fieldVal << item.LowerBit);
-                }
-            }
-            else
-            {
-                if (!TryParseHexUInt(txtRegValueHex.Text, out newValue))
-                {
-                    MessageBox.Show("레지스터 값 형식이 잘못되었습니다. 예: 0x00000001");
-                    return;
-                }
-            }
+            if (!TryParseHexUInt(txtRegValueHex.Text, out newValue))
+                newValue = _currentRegValue;
 
             try
             {
