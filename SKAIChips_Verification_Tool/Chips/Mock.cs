@@ -55,7 +55,7 @@ namespace SKAIChips_Verification_Tool.Chips
 
             Tests = new[]
             {
-                new ChipTestInfo("dummy", "Dummy Test", "Mock 테스트 시퀀스 자리")
+                new ChipTestInfo("TEST.DUMMY", "Dummy Test", "Mock 테스트 시퀀스 자리", "TEST")
             };
         }
 
@@ -68,7 +68,7 @@ namespace SKAIChips_Verification_Tool.Chips
 
             switch (testId)
             {
-                case "dummy":
+                case "TEST.DUMMY":
                     await log("INFO", "아직 구현 안 됨");
                     await Task.Delay(200, cancellationToken);
                     break;

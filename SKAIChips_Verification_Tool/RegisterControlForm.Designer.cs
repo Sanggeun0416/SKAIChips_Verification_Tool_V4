@@ -52,20 +52,12 @@ namespace SKAIChips_Verification_Tool
         private Label labelConnection;
         private Label lblProtocolInfo;
         private Label lblFtdiInfo;
-
-        // AutoTask 영역
-        private GroupBox groupAutoTask;
-        private ComboBox comboAutoTask;
-        private Button btnAutoTaskEdit;
-        private Button btnAutoTaskRun;
-        private Button btnAutoTaskStop;
-        private ProgressBar progressAutoTask;
-        private Label lblAutoTaskStatus;
-        private DataGridView dgvAutoTaskLog;
-        private DataGridViewTextBoxColumn colAutoTime;
-        private DataGridViewTextBoxColumn colAutoState;
-        private DataGridViewTextBoxColumn colAutoStep;
-        private DataGridViewTextBoxColumn colAutoMessage;
+        private GroupBox grpRunTest;
+        private ComboBox comboTestCategory;
+        private ComboBox comboTests;
+        private Button btnRunTest;
+        private Button btnStopTest;
+        private DataGridView dgvTestLog;
 
         protected override void Dispose(bool disposing)
         {
@@ -122,32 +114,24 @@ namespace SKAIChips_Verification_Tool
             groupLog = new GroupBox();
             groupRegDesc = new GroupBox();
             groupRegTree = new GroupBox();
-
-            // AutoTask
-            groupAutoTask = new GroupBox();
-            comboAutoTask = new ComboBox();
-            btnAutoTaskEdit = new Button();
-            btnAutoTaskRun = new Button();
-            btnAutoTaskStop = new Button();
-            progressAutoTask = new ProgressBar();
-            lblAutoTaskStatus = new Label();
-            dgvAutoTaskLog = new DataGridView();
-            colAutoTime = new DataGridViewTextBoxColumn();
-            colAutoState = new DataGridViewTextBoxColumn();
-            colAutoStep = new DataGridViewTextBoxColumn();
-            colAutoMessage = new DataGridViewTextBoxColumn();
+            grpRunTest = new GroupBox();
+            comboTestCategory = new ComboBox();
+            comboTests = new ComboBox();
+            btnRunTest = new Button();
+            btnStopTest = new Button();
+            dgvTestLog = new DataGridView();
 
             ((System.ComponentModel.ISupportInitialize)dgvLog).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvBits).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numRegIndex).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)dgvAutoTaskLog).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)dgvTestLog).BeginInit();
             groupSetup.SuspendLayout();
             groupRegMap.SuspendLayout();
             groupRegCont.SuspendLayout();
             groupLog.SuspendLayout();
             groupRegDesc.SuspendLayout();
             groupRegTree.SuspendLayout();
-            groupAutoTask.SuspendLayout();
+            grpRunTest.SuspendLayout();
             SuspendLayout();
 
             // btnConnect
@@ -523,100 +507,63 @@ namespace SKAIChips_Verification_Tool
             groupRegTree.TabStop = false;
             groupRegTree.Text = "Register Tree";
 
-            // ===== AutoTask Group =====
-            groupAutoTask.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            groupAutoTask.Controls.Add(dgvAutoTaskLog);
-            groupAutoTask.Controls.Add(lblAutoTaskStatus);
-            groupAutoTask.Controls.Add(progressAutoTask);
-            groupAutoTask.Controls.Add(btnAutoTaskStop);
-            groupAutoTask.Controls.Add(btnAutoTaskRun);
-            groupAutoTask.Controls.Add(btnAutoTaskEdit);
-            groupAutoTask.Controls.Add(comboAutoTask);
-            groupAutoTask.Location = new Point(798, 286);
-            groupAutoTask.Name = "groupAutoTask";
-            groupAutoTask.Size = new Size(585, 220);
-            groupAutoTask.TabIndex = 41;
-            groupAutoTask.TabStop = false;
-            groupAutoTask.Text = "AutoTask";
+            // Run Test Group
+            grpRunTest.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            grpRunTest.Controls.Add(dgvTestLog);
+            grpRunTest.Controls.Add(btnStopTest);
+            grpRunTest.Controls.Add(btnRunTest);
+            grpRunTest.Controls.Add(comboTests);
+            grpRunTest.Controls.Add(comboTestCategory);
+            grpRunTest.Location = new Point(798, 286);
+            grpRunTest.Name = "grpRunTest";
+            grpRunTest.Size = new Size(585, 220);
+            grpRunTest.TabIndex = 41;
+            grpRunTest.TabStop = false;
+            grpRunTest.Text = "Run Test";
 
-            comboAutoTask.DropDownStyle = ComboBoxStyle.DropDownList;
-            comboAutoTask.Location = new Point(8, 22);
-            comboAutoTask.Name = "comboAutoTask";
-            comboAutoTask.Size = new Size(220, 23);
-            comboAutoTask.TabIndex = 0;
+            comboTestCategory.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboTestCategory.Location = new Point(8, 22);
+            comboTestCategory.Name = "comboTestCategory";
+            comboTestCategory.Size = new Size(140, 23);
+            comboTestCategory.TabIndex = 0;
 
-            btnAutoTaskEdit.Location = new Point(234, 22);
-            btnAutoTaskEdit.Name = "btnAutoTaskEdit";
-            btnAutoTaskEdit.Size = new Size(60, 23);
-            btnAutoTaskEdit.TabIndex = 1;
-            btnAutoTaskEdit.Text = "Edit";
+            comboTests.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboTests.Location = new Point(154, 22);
+            comboTests.Name = "comboTests";
+            comboTests.Size = new Size(220, 23);
+            comboTests.TabIndex = 1;
 
-            btnAutoTaskRun.Location = new Point(300, 22);
-            btnAutoTaskRun.Name = "btnAutoTaskRun";
-            btnAutoTaskRun.Size = new Size(60, 23);
-            btnAutoTaskRun.TabIndex = 2;
-            btnAutoTaskRun.Text = "Run";
+            btnRunTest.Location = new Point(380, 22);
+            btnRunTest.Name = "btnRunTest";
+            btnRunTest.Size = new Size(98, 23);
+            btnRunTest.TabIndex = 2;
+            btnRunTest.Text = "Run Test";
+            btnRunTest.UseVisualStyleBackColor = true;
 
-            btnAutoTaskStop.Location = new Point(366, 22);
-            btnAutoTaskStop.Name = "btnAutoTaskStop";
-            btnAutoTaskStop.Size = new Size(60, 23);
-            btnAutoTaskStop.TabIndex = 3;
-            btnAutoTaskStop.Text = "Stop";
+            btnStopTest.Location = new Point(484, 22);
+            btnStopTest.Name = "btnStopTest";
+            btnStopTest.Size = new Size(95, 23);
+            btnStopTest.TabIndex = 3;
+            btnStopTest.Text = "Stop";
+            btnStopTest.UseVisualStyleBackColor = true;
 
-            progressAutoTask.Location = new Point(8, 51);
-            progressAutoTask.Name = "progressAutoTask";
-            progressAutoTask.Size = new Size(418, 18);
-            progressAutoTask.TabIndex = 4;
-
-            lblAutoTaskStatus.AutoSize = false;
-            lblAutoTaskStatus.Location = new Point(8, 72);
-            lblAutoTaskStatus.Name = "lblAutoTaskStatus";
-            lblAutoTaskStatus.Size = new Size(418, 15);
-            lblAutoTaskStatus.TabIndex = 5;
-            lblAutoTaskStatus.Text = "Idle";
-
-            // AutoTask Log Grid
-            dgvAutoTaskLog.AllowUserToAddRows = false;
-            dgvAutoTaskLog.AllowUserToDeleteRows = false;
-            dgvAutoTaskLog.ReadOnly = true;
-            dgvAutoTaskLog.RowHeadersVisible = false;
-            dgvAutoTaskLog.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dgvAutoTaskLog.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvAutoTaskLog.Columns.AddRange(new DataGridViewColumn[]
-            {
-                colAutoTime, colAutoState, colAutoStep, colAutoMessage
-            });
-            dgvAutoTaskLog.Dock = DockStyle.Bottom;
-            dgvAutoTaskLog.Location = new Point(3, 93);
-            dgvAutoTaskLog.Name = "dgvAutoTaskLog";
-            dgvAutoTaskLog.Size = new Size(579, 124);
-            dgvAutoTaskLog.TabIndex = 6;
-
-            colAutoTime.HeaderText = "Time";
-            colAutoTime.Name = "colAutoTime";
-            colAutoTime.ReadOnly = true;
-            colAutoTime.FillWeight = 15;
-
-            colAutoState.HeaderText = "State";
-            colAutoState.Name = "colAutoState";
-            colAutoState.ReadOnly = true;
-            colAutoState.FillWeight = 15;
-
-            colAutoStep.HeaderText = "Step";
-            colAutoStep.Name = "colAutoStep";
-            colAutoStep.ReadOnly = true;
-            colAutoStep.FillWeight = 20;
-
-            colAutoMessage.HeaderText = "Message";
-            colAutoMessage.Name = "colAutoMessage";
-            colAutoMessage.ReadOnly = true;
-            colAutoMessage.FillWeight = 50;
+            dgvTestLog.AllowUserToAddRows = false;
+            dgvTestLog.AllowUserToDeleteRows = false;
+            dgvTestLog.ReadOnly = true;
+            dgvTestLog.RowHeadersVisible = false;
+            dgvTestLog.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvTestLog.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvTestLog.Dock = DockStyle.Bottom;
+            dgvTestLog.Location = new Point(3, 60);
+            dgvTestLog.Name = "dgvTestLog";
+            dgvTestLog.Size = new Size(579, 157);
+            dgvTestLog.TabIndex = 4;
 
             // Form
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1384, 841);
-            Controls.Add(groupAutoTask);
+            Controls.Add(grpRunTest);
             Controls.Add(groupRegTree);
             Controls.Add(groupRegDesc);
             Controls.Add(groupLog);
@@ -630,7 +577,7 @@ namespace SKAIChips_Verification_Tool
             ((System.ComponentModel.ISupportInitialize)dgvLog).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvBits).EndInit();
             ((System.ComponentModel.ISupportInitialize)numRegIndex).EndInit();
-            ((System.ComponentModel.ISupportInitialize)dgvAutoTaskLog).EndInit();
+            ((System.ComponentModel.ISupportInitialize)dgvTestLog).EndInit();
             groupSetup.ResumeLayout(false);
             groupSetup.PerformLayout();
             groupRegMap.ResumeLayout(false);
@@ -639,7 +586,7 @@ namespace SKAIChips_Verification_Tool
             groupLog.ResumeLayout(false);
             groupRegDesc.ResumeLayout(false);
             groupRegTree.ResumeLayout(false);
-            groupAutoTask.ResumeLayout(false);
+            grpRunTest.ResumeLayout(false);
             ResumeLayout(false);
         }
     }

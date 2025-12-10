@@ -37,11 +37,14 @@ namespace SKAIChips_Verification_Tool.Core
 
         public string Description { get; }
 
-        public ChipTestInfo(string id, string name, string description)
+        public string Category { get; }
+
+        public ChipTestInfo(string id, string name, string description, string category)
         {
             Id = id;
             Name = name;
             Description = description;
+            Category = category;
         }
     }
 }
