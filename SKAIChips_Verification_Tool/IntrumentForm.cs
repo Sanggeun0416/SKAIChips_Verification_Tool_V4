@@ -292,19 +292,30 @@ namespace SKAIChips_Verification_Tool
 
         #region Test / Command / Capture
 
-        private void TestInstrument(InstrumentInfo info)
+        private bool IsInstrumentReady(InstrumentInfo instrument)
         {
-            if (!info.Enabled)
+            if (instrument == null)
+                return false;
+
+            if (!instrument.Enabled)
             {
                 MessageBox.Show(this, "Enable 체크 후 사용하세요.", "Instrument", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                return false;
             }
 
-            if (string.IsNullOrWhiteSpace(info.VisaAddress))
+            if (string.IsNullOrWhiteSpace(instrument.VisaAddress))
             {
                 MessageBox.Show(this, "VISA Address가 비어 있습니다.", "Instrument", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                return false;
             }
+
+            return true;
+        }
+
+        private void TestInstrument(InstrumentInfo info)
+        {
+            if (!IsInstrumentReady(info))
+                return;
 
             var rowIndex = _instruments.IndexOf(info);
             DataGridViewCell nameCell = null;
@@ -352,17 +363,8 @@ namespace SKAIChips_Verification_Tool
             if (ins == null)
                 return;
 
-            if (!ins.Enabled)
-            {
-                MessageBox.Show(this, "Enable 체크 후 사용하세요.", "Instrument", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (!IsInstrumentReady(ins))
                 return;
-            }
-
-            if (string.IsNullOrWhiteSpace(ins.VisaAddress))
-            {
-                MessageBox.Show(this, "VISA Address가 비어 있습니다.", "Instrument", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
 
             var cmd = textBox_InsCommand.Text;
             if (string.IsNullOrWhiteSpace(cmd))
@@ -416,17 +418,8 @@ namespace SKAIChips_Verification_Tool
             if (ins == null)
                 return;
 
-            if (!ins.Enabled)
-            {
-                MessageBox.Show(this, "Enable 체크 후 사용하세요.", "Instrument", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (!IsInstrumentReady(ins))
                 return;
-            }
-
-            if (string.IsNullOrWhiteSpace(ins.VisaAddress))
-            {
-                MessageBox.Show(this, "VISA Address가 비어 있습니다.", "Instrument", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
 
             try
             {
