@@ -36,6 +36,7 @@ namespace SKAIChips_Verification_Tool
         private uint _currentRegValue;
         private bool _isUpdatingRegValue;
         private string _scriptFilePath;
+        private string _firmwareFilePath;
 
         private const int I2cTimeoutMs = 200;
 
@@ -43,6 +44,7 @@ namespace SKAIChips_Verification_Tool
         private bool _isUpdatingBits;
 
         private readonly Dictionary<Register, uint> _regValues = new();
+        private readonly IniFile _iniFile = new(Path.Combine(AppContext.BaseDirectory, "settings.ini"));
 
         private IChipTestSuite _testSuite;
         private CancellationTokenSource _testCts;
@@ -94,7 +96,6 @@ namespace SKAIChips_Verification_Tool
             var colBit = new DataGridViewTextBoxColumn { Name = "colBit", HeaderText = "Bit", ReadOnly = true };
             var colName = new DataGridViewTextBoxColumn { Name = "colName", HeaderText = "Name", ReadOnly = true };
             var colDefault = new DataGridViewTextBoxColumn { Name = "colDefault", HeaderText = "Default", ReadOnly = true };
-            var colCurrent = new DataGridViewTextBoxColumn { Name = "colCurrent", HeaderText = "Current", ReadOnly = false };
             var colDesc = new DataGridViewTextBoxColumn
             {
                 Name = "colDesc",
@@ -106,10 +107,11 @@ namespace SKAIChips_Verification_Tool
             dgvBits.Columns.Add(colBit);
             dgvBits.Columns.Add(colName);
             dgvBits.Columns.Add(colDefault);
-            dgvBits.Columns.Add(colCurrent);
             dgvBits.Columns.Add(colDesc);
 
-            dgvBits.CellEndEdit += dgvBits_CellEndEdit;
+            dgvBits.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells;
+            dgvBits.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            colDesc.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
         }
 
         private void InitTreeContextMenu()
@@ -267,6 +269,11 @@ namespace SKAIChips_Verification_Tool
             dgvTestLog.Columns.Add(colLevel);
             dgvTestLog.Columns.Add(colMessage);
 
+            dgvTestLog.AutoGenerateColumns = false;
+            dgvTestLog.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells;
+            dgvTestLog.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            colMessage.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+
             comboTestCategory.Items.Clear();
             comboTests.Items.Clear();
             btnRunTest.Enabled = false;
@@ -330,36 +337,116 @@ namespace SKAIChips_Verification_Tool
             }
         }
 
+        private bool SelectFirmwareFile()
+        {
+            string section = GetCurrentProjectName();
+            _firmwareFilePath = _iniFile.Read(section, "FirmwarePath", "");
+
+            using (OpenFileDialog fileDlg = new OpenFileDialog())
+            {
+                fileDlg.Filter = "FW File (*.bin,*.hex)|*.bin;*.hex|All files (*.*)|*.*";
+
+                if (string.IsNullOrWhiteSpace(_firmwareFilePath))
+                    fileDlg.InitialDirectory = Directory.GetCurrentDirectory();
+                else
+                    fileDlg.InitialDirectory = Path.GetDirectoryName(_firmwareFilePath);
+
+                if (fileDlg.ShowDialog() == DialogResult.OK)
+                {
+                    _firmwareFilePath = fileDlg.FileName;
+                    _iniFile.Write(section, "FirmwarePath", _firmwareFilePath);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private void ShowTreeSearchDialog()
         {
             string text = PromptText("Register 검색", "검색할 텍스트를 입력하세요:", "");
             if (string.IsNullOrWhiteSpace(text))
                 return;
 
-            var node = FindTreeNodeContains(tvRegs.Nodes, text);
-            if (node == null)
+            var matches = FindTreeNodesContains(tvRegs.Nodes, text);
+            if (matches.Count == 0)
             {
                 MessageBox.Show("일치하는 항목이 없습니다.");
                 return;
             }
 
-            tvRegs.SelectedNode = node;
-            tvRegs.Focus();
-            node.EnsureVisible();
+            if (matches.Count == 1)
+            {
+                var node = matches[0];
+                tvRegs.SelectedNode = node;
+                tvRegs.Focus();
+                node.EnsureVisible();
+                return;
+            }
+
+            using (var form = new Form())
+            using (var lst = new ListBox())
+            using (var btnOk = new Button())
+            using (var btnCancel = new Button())
+            {
+                form.Text = "검색 결과";
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.MinimizeBox = false;
+                form.MaximizeBox = false;
+                form.ClientSize = new Size(400, 320);
+
+                lst.Location = new Point(10, 10);
+                lst.Size = new Size(380, 250);
+                lst.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+
+                foreach (var node in matches)
+                    lst.Items.Add(node);
+
+                lst.DisplayMember = "Text";
+
+                btnOk.Text = "OK";
+                btnOk.DialogResult = DialogResult.OK;
+                btnOk.Location = new Point(224, 275);
+                btnOk.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
+                btnCancel.Text = "Cancel";
+                btnCancel.DialogResult = DialogResult.Cancel;
+                btnCancel.Location = new Point(315, 275);
+                btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
+                form.Controls.Add(lst);
+                form.Controls.Add(btnOk);
+                form.Controls.Add(btnCancel);
+                form.AcceptButton = btnOk;
+                form.CancelButton = btnCancel;
+
+                if (form.ShowDialog(this) == DialogResult.OK)
+                {
+                    if (lst.SelectedItem is TreeNode selected)
+                    {
+                        tvRegs.SelectedNode = selected;
+                        tvRegs.Focus();
+                        selected.EnsureVisible();
+                    }
+                }
+            }
         }
 
-        private TreeNode FindTreeNodeContains(TreeNodeCollection nodes, string text)
+        private List<TreeNode> FindTreeNodesContains(TreeNodeCollection nodes, string text)
         {
+            var result = new List<TreeNode>();
+
             foreach (TreeNode node in nodes)
             {
                 if (node.Text.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)
-                    return node;
+                    result.Add(node);
 
-                var child = FindTreeNodeContains(node.Nodes, text);
-                if (child != null)
-                    return child;
+                if (node.Nodes.Count > 0)
+                    result.AddRange(FindTreeNodesContains(node.Nodes, text));
             }
-            return null;
+
+            return result;
         }
 
         private void UpdateStatusText()
@@ -426,28 +513,6 @@ namespace SKAIChips_Verification_Tool
             return uint.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
         }
 
-        private bool TryParseFieldValue(object cellValue, int width, out uint value)
-        {
-            value = 0;
-
-            if (cellValue == null)
-                return false;
-
-            string text = cellValue.ToString().Trim();
-
-            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                text = text.Substring(2);
-
-            if (!uint.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value))
-                return false;
-
-            uint max = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
-            if (value > max)
-                value = max;
-
-            return true;
-        }
-
         private void AddLog(string type, string addrText, string dataText, string result)
         {
             int rowIndex = dgvLog.Rows.Add();
@@ -506,6 +571,19 @@ namespace SKAIChips_Verification_Tool
             {
                 MessageBox.Show("실행할 테스트를 선택하세요.");
                 return;
+            }
+
+            if (string.Equals(info.Category, "FW", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(info.Id, "FW.FLASH_WRITE", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(_firmwareFilePath))
+                {
+                    if (!SelectFirmwareFile())
+                        return;
+                }
+
+                if (_testSuite is Chips.OasisTestSuite oasisSuite)
+                    oasisSuite.SetFirmwareFilePath(_firmwareFilePath);
             }
 
             _testCts = new CancellationTokenSource();
@@ -577,6 +655,8 @@ namespace SKAIChips_Verification_Tool
             row.Cells["colMessage"].Value = message;
 
             dgvTestLog.FirstDisplayedScrollingRowIndex = rowIndex;
+
+            dgvTestLog.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.AllCells);
         }
 
         #endregion
@@ -799,46 +879,6 @@ namespace SKAIChips_Verification_Tool
 
         #region Bit / value editing
 
-        private void dgvBits_CellEndEdit(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0)
-                return;
-
-            if (dgvBits.Columns[e.ColumnIndex].Name != "colCurrent")
-                return;
-
-            if (_selectedRegister == null)
-                return;
-
-            uint newValue = _currentRegValue;
-
-            foreach (DataGridViewRow r in dgvBits.Rows)
-            {
-                if (r.Tag is not RegisterItem item)
-                    continue;
-
-                var cell = r.Cells["colCurrent"].Value;
-                if (cell == null)
-                    continue;
-
-                string text = cell.ToString();
-                if (string.IsNullOrWhiteSpace(text))
-                    continue;
-
-                int width = item.UpperBit - item.LowerBit + 1;
-                if (!TryParseFieldValue(text, width, out uint fieldVal))
-                    continue;
-
-                uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << item.LowerBit;
-
-                newValue &= ~mask;
-                newValue |= (fieldVal << item.LowerBit);
-            }
-
-            _currentRegValue = newValue;
-            UpdateBitCurrentValues();
-        }
-
         private void BitButton_Click(object sender, EventArgs e)
         {
             if (_isUpdatingBits)
@@ -1022,13 +1062,11 @@ namespace SKAIChips_Verification_Tool
                         Tag = reg
                     };
 
+                    uint regVal = GetRegisterValue(reg);
+
                     foreach (var item in reg.Items)
                     {
-                        string bitText = item.UpperBit == item.LowerBit
-                            ? item.UpperBit.ToString()
-                            : $"{item.UpperBit}:{item.LowerBit}";
-
-                        var itemNode = new TreeNode($"[{bitText}] {item.Name}")
+                        var itemNode = new TreeNode(FormatItemNodeText(item, regVal))
                         {
                             Tag = item
                         };
@@ -1053,6 +1091,19 @@ namespace SKAIChips_Verification_Tool
             }
 
             tvRegs.EndUpdate();
+        }
+
+        private static string FormatItemNodeText(RegisterItem item, uint regValue)
+        {
+            string bitText = item.UpperBit == item.LowerBit
+                ? item.UpperBit.ToString()
+                : $"{item.UpperBit}:{item.LowerBit}";
+
+            int width = item.UpperBit - item.LowerBit + 1;
+            uint mask = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
+            uint fieldVal = (regValue >> item.LowerBit) & mask;
+
+            return $"[{bitText}] {item.Name} = {fieldVal} (0x{fieldVal:X})";
         }
 
         private uint GetRegisterValue(Register reg)
@@ -1171,7 +1222,6 @@ namespace SKAIChips_Verification_Tool
                 row.Cells["colBit"].Value = bitText;
                 row.Cells["colName"].Value = item.Name;
                 row.Cells["colDefault"].Value = $"0x{item.DefaultValue:X}";
-                row.Cells["colCurrent"].Value = "";
                 row.Cells["colDesc"].Value = item.Description;
 
                 row.Tag = item;
@@ -1216,19 +1266,6 @@ namespace SKAIChips_Verification_Tool
 
         private void UpdateBitCurrentValues()
         {
-            for (int i = 0; i < dgvBits.Rows.Count; i++)
-            {
-                var row = dgvBits.Rows[i];
-                if (row.Tag is not RegisterItem item)
-                    continue;
-
-                int width = item.UpperBit - item.LowerBit + 1;
-                uint mask = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
-                uint fieldVal = (_currentRegValue >> item.LowerBit) & mask;
-
-                row.Cells["colCurrent"].Value = $"0x{fieldVal:X}";
-            }
-
             txtRegValueHex.Text = $"0x{_currentRegValue:X8}";
 
             if (_selectedRegister != null)
@@ -1237,6 +1274,72 @@ namespace SKAIChips_Verification_Tool
             UpdateBitButtonsFromValue(_currentRegValue);
 
             UpdateNumRegIndexForSelectedItem();
+
+            if (_selectedRegister != null)
+                UpdateTreeNodesForRegister(_selectedRegister, _currentRegValue);
+        }
+
+        private void UpdateTreeNodesForRegister(Register reg, uint regValue)
+        {
+            if (reg == null)
+                return;
+
+            if (tvRegs == null)
+                return;
+
+            var stack = new Stack<TreeNode>();
+
+            foreach (TreeNode root in tvRegs.Nodes)
+                stack.Push(root);
+
+            while (stack.Count > 0)
+            {
+                var node = stack.Pop();
+
+                if (node.Tag is RegisterItem item && node.Parent?.Tag is Register parentReg && ReferenceEquals(parentReg, reg))
+                {
+                    node.Text = FormatItemNodeText(item, regValue);
+                }
+
+                foreach (TreeNode child in node.Nodes)
+                    stack.Push(child);
+            }
+        }
+
+        private void RefreshRegisterTreeValues()
+        {
+            if (tvRegs.Nodes.Count == 0)
+                return;
+
+            tvRegs.BeginUpdate();
+            try
+            {
+                foreach (TreeNode groupNode in tvRegs.Nodes)
+                {
+                    if (groupNode.Tag is not RegisterGroup g)
+                        continue;
+
+                    foreach (TreeNode regNode in groupNode.Nodes)
+                    {
+                        if (regNode.Tag is not Register reg)
+                            continue;
+
+                        uint regVal = GetRegisterValue(reg);
+
+                        foreach (TreeNode itemNode in regNode.Nodes)
+                        {
+                            if (itemNode.Tag is not RegisterItem item)
+                                continue;
+
+                            itemNode.Text = FormatItemNodeText(item, regVal);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                tvRegs.EndUpdate();
+            }
         }
 
         private void UpdateNumRegIndexForSelectedItem()
@@ -1372,6 +1475,8 @@ namespace SKAIChips_Verification_Tool
                 _currentRegValue = GetRegisterValue(_selectedRegister);
                 UpdateBitCurrentValues();
             }
+
+            RefreshRegisterTreeValues();
         }
 
         private void btnSaveScript_Click(object sender, EventArgs e)
@@ -1509,55 +1614,8 @@ namespace SKAIChips_Verification_Tool
             uint addr = _selectedRegister.Address;
             uint newValue;
 
-            if (dgvBits.SelectedRows.Count > 0 && dgvBits.SelectedRows[0].Tag is RegisterItem selItem)
-            {
-                var row = dgvBits.SelectedRows[0];
-                int width = selItem.UpperBit - selItem.LowerBit + 1;
-
-                if (!TryParseFieldValue(row.Cells["colCurrent"].Value, width, out uint fieldVal))
-                {
-                    MessageBox.Show("Current 값 형식이 잘못되었습니다. 예: 0x1");
-                    return;
-                }
-
-                uint baseValue = _currentRegValue;
-                uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << selItem.LowerBit;
-                newValue = baseValue;
-                newValue &= ~mask;
-                newValue |= (fieldVal << selItem.LowerBit);
-            }
-            else if (_selectedRegister != null && dgvBits.Rows.Count > 0)
-            {
-                uint baseValue = _currentRegValue;
-                newValue = baseValue;
-
-                foreach (DataGridViewRow r in dgvBits.Rows)
-                {
-                    if (r.Tag is not RegisterItem item)
-                        continue;
-
-                    int width = item.UpperBit - item.LowerBit + 1;
-                    var cell = r.Cells["colCurrent"].Value;
-
-                    if (cell == null || string.IsNullOrWhiteSpace(cell.ToString()))
-                        continue;
-
-                    if (!TryParseFieldValue(cell, width, out uint fieldVal))
-                        continue;
-
-                    uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << item.LowerBit;
-                    newValue &= ~mask;
-                    newValue |= (fieldVal << item.LowerBit);
-                }
-            }
-            else
-            {
-                if (!TryParseHexUInt(txtRegValueHex.Text, out newValue))
-                {
-                    MessageBox.Show("레지스터 값 형식이 잘못되었습니다. 예: 0x00000001");
-                    return;
-                }
-            }
+            if (!TryParseHexUInt(txtRegValueHex.Text, out newValue))
+                newValue = _currentRegValue;
 
             try
             {
@@ -1633,6 +1691,8 @@ namespace SKAIChips_Verification_Tool
                 _currentRegValue = GetRegisterValue(_selectedRegister);
                 UpdateBitCurrentValues();
             }
+
+            RefreshRegisterTreeValues();
         }
 
         private async void btnReadAll_Click(object sender, EventArgs e)
@@ -1682,6 +1742,8 @@ namespace SKAIChips_Verification_Tool
                 _currentRegValue = GetRegisterValue(_selectedRegister);
                 UpdateBitCurrentValues();
             }
+
+            RefreshRegisterTreeValues();
         }
 
         #endregion
