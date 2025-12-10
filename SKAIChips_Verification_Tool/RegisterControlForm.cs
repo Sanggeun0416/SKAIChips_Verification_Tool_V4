@@ -36,6 +36,7 @@ namespace SKAIChips_Verification_Tool
         private uint _currentRegValue;
         private bool _isUpdatingRegValue;
         private string _scriptFilePath;
+        private string _firmwareFilePath;
 
         private const int I2cTimeoutMs = 200;
 
@@ -43,6 +44,7 @@ namespace SKAIChips_Verification_Tool
         private bool _isUpdatingBits;
 
         private readonly Dictionary<Register, uint> _regValues = new();
+        private readonly IniFile _iniFile = new(Path.Combine(AppContext.BaseDirectory, "settings.ini"));
 
         private IChipTestSuite _testSuite;
         private CancellationTokenSource _testCts;
@@ -330,36 +332,116 @@ namespace SKAIChips_Verification_Tool
             }
         }
 
+        private bool SelectFirmwareFile()
+        {
+            string section = GetCurrentProjectName();
+            _firmwareFilePath = _iniFile.Read(section, "FirmwarePath", "");
+
+            using (OpenFileDialog fileDlg = new OpenFileDialog())
+            {
+                fileDlg.Filter = "FW File (*.bin,*.hex)|*.bin;*.hex|All files (*.*)|*.*";
+
+                if (string.IsNullOrWhiteSpace(_firmwareFilePath))
+                    fileDlg.InitialDirectory = Directory.GetCurrentDirectory();
+                else
+                    fileDlg.InitialDirectory = Path.GetDirectoryName(_firmwareFilePath);
+
+                if (fileDlg.ShowDialog() == DialogResult.OK)
+                {
+                    _firmwareFilePath = fileDlg.FileName;
+                    _iniFile.Write(section, "FirmwarePath", _firmwareFilePath);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private void ShowTreeSearchDialog()
         {
             string text = PromptText("Register 검색", "검색할 텍스트를 입력하세요:", "");
             if (string.IsNullOrWhiteSpace(text))
                 return;
 
-            var node = FindTreeNodeContains(tvRegs.Nodes, text);
-            if (node == null)
+            var matches = FindTreeNodesContains(tvRegs.Nodes, text);
+            if (matches.Count == 0)
             {
                 MessageBox.Show("일치하는 항목이 없습니다.");
                 return;
             }
 
-            tvRegs.SelectedNode = node;
-            tvRegs.Focus();
-            node.EnsureVisible();
+            if (matches.Count == 1)
+            {
+                var node = matches[0];
+                tvRegs.SelectedNode = node;
+                tvRegs.Focus();
+                node.EnsureVisible();
+                return;
+            }
+
+            using (var form = new Form())
+            using (var lst = new ListBox())
+            using (var btnOk = new Button())
+            using (var btnCancel = new Button())
+            {
+                form.Text = "검색 결과";
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.MinimizeBox = false;
+                form.MaximizeBox = false;
+                form.ClientSize = new Size(400, 320);
+
+                lst.Location = new Point(10, 10);
+                lst.Size = new Size(380, 250);
+                lst.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+
+                foreach (var node in matches)
+                    lst.Items.Add(node);
+
+                lst.DisplayMember = "Text";
+
+                btnOk.Text = "OK";
+                btnOk.DialogResult = DialogResult.OK;
+                btnOk.Location = new Point(224, 275);
+                btnOk.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
+                btnCancel.Text = "Cancel";
+                btnCancel.DialogResult = DialogResult.Cancel;
+                btnCancel.Location = new Point(315, 275);
+                btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
+                form.Controls.Add(lst);
+                form.Controls.Add(btnOk);
+                form.Controls.Add(btnCancel);
+                form.AcceptButton = btnOk;
+                form.CancelButton = btnCancel;
+
+                if (form.ShowDialog(this) == DialogResult.OK)
+                {
+                    if (lst.SelectedItem is TreeNode selected)
+                    {
+                        tvRegs.SelectedNode = selected;
+                        tvRegs.Focus();
+                        selected.EnsureVisible();
+                    }
+                }
+            }
         }
 
-        private TreeNode FindTreeNodeContains(TreeNodeCollection nodes, string text)
+        private List<TreeNode> FindTreeNodesContains(TreeNodeCollection nodes, string text)
         {
+            var result = new List<TreeNode>();
+
             foreach (TreeNode node in nodes)
             {
                 if (node.Text.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)
-                    return node;
+                    result.Add(node);
 
-                var child = FindTreeNodeContains(node.Nodes, text);
-                if (child != null)
-                    return child;
+                if (node.Nodes.Count > 0)
+                    result.AddRange(FindTreeNodesContains(node.Nodes, text));
             }
-            return null;
+
+            return result;
         }
 
         private void UpdateStatusText()
@@ -506,6 +588,19 @@ namespace SKAIChips_Verification_Tool
             {
                 MessageBox.Show("실행할 테스트를 선택하세요.");
                 return;
+            }
+
+            if (string.Equals(info.Category, "FW", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(info.Id, "FW.FLASH_WRITE", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(_firmwareFilePath))
+                {
+                    if (!SelectFirmwareFile())
+                        return;
+                }
+
+                if (_testSuite is Chips.OasisTestSuite oasisSuite)
+                    oasisSuite.SetFirmwareFilePath(_firmwareFilePath);
             }
 
             _testCts = new CancellationTokenSource();
@@ -1237,6 +1332,43 @@ namespace SKAIChips_Verification_Tool
             UpdateBitButtonsFromValue(_currentRegValue);
 
             UpdateNumRegIndexForSelectedItem();
+
+            if (_selectedRegister != null)
+                UpdateTreeNodesForRegister(_selectedRegister, _currentRegValue);
+        }
+
+        private void UpdateTreeNodesForRegister(Register reg, uint regValue)
+        {
+            if (reg == null)
+                return;
+
+            if (tvRegs == null)
+                return;
+
+            var stack = new Stack<TreeNode>();
+
+            foreach (TreeNode root in tvRegs.Nodes)
+                stack.Push(root);
+
+            while (stack.Count > 0)
+            {
+                var node = stack.Pop();
+
+                if (node.Tag is RegisterItem item && node.Parent?.Tag is Register parentReg && ReferenceEquals(parentReg, reg))
+                {
+                    int width = item.UpperBit - item.LowerBit + 1;
+                    uint mask = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
+                    uint fieldVal = (regValue >> item.LowerBit) & mask;
+                    string bitText = item.UpperBit == item.LowerBit
+                        ? item.UpperBit.ToString()
+                        : $"{item.UpperBit}:{item.LowerBit}";
+
+                    node.Text = $"[{bitText}] {item.Name} = {fieldVal} (0x{fieldVal:X})";
+                }
+
+                foreach (TreeNode child in node.Nodes)
+                    stack.Push(child);
+            }
         }
 
         private void UpdateNumRegIndexForSelectedItem()
