@@ -108,7 +108,7 @@ namespace SKAIChips_Verification_Tool.Chips
 
             Tests = new[]
             {
-                new ChipTestInfo("dummy", "Dummy Test", "Oasis 테스트 시퀀스 자리")
+                new ChipTestInfo("dummy", "Dummy Test", "Oasis 테스트 시퀀스 자리", "TEST")
             };
         }
 
