@@ -49,14 +49,6 @@ namespace SKAIChips_Verification_Tool
         private IChipTestSuite _testSuite;
         private CancellationTokenSource _testCts;
         private bool _isRunningTest;
-
-        // Test log status strip / progress / timer
-        private StatusStrip _testStatusStrip;
-        private ToolStripStatusLabel _testStatusLabel;
-        private ToolStripProgressBar _testProgressBar;
-        private ToolStripStatusLabel _testElapsedLabel;
-
-        private Timer _testTimer;
         private DateTime _testStartTime;
 
         #endregion
@@ -293,55 +285,19 @@ namespace SKAIChips_Verification_Tool
             btnStopTest.Enabled = false;
             dgvTestLog.Rows.Clear();
 
-            _testStatusStrip = new StatusStrip
-            {
-                Name = "statusStripTest",
-                Dock = DockStyle.Top
-            };
+            if (toolStripStatusLabelTestStatus != null)
+                toolStripStatusLabelTestStatus.Text = "Idle";
 
-            _testStatusLabel = new ToolStripStatusLabel
+            if (toolStripProgressBarTest != null)
             {
-                Name = "toolStripStatusLabelTestStatus",
-                Text = "Idle"
-            };
-
-            var spacer = new ToolStripStatusLabel
-            {
-                Spring = true
-            };
-
-            _testProgressBar = new ToolStripProgressBar
-            {
-                Name = "toolStripProgressBarTest",
-                Minimum = 0,
-                Maximum = 100,
-                Value = 0,
-                Style = ProgressBarStyle.Blocks
-            };
-
-            _testElapsedLabel = new ToolStripStatusLabel
-            {
-                Name = "toolStripStatusLabelElapsed",
-                Text = "Elapsed: 00:00",
-                TextAlign = ContentAlignment.MiddleRight
-            };
-
-            _testStatusStrip.Items.Add(_testStatusLabel);
-            _testStatusStrip.Items.Add(_testProgressBar);
-            _testStatusStrip.Items.Add(spacer);
-            _testStatusStrip.Items.Add(_testElapsedLabel);
-
-            if (dgvTestLog.Parent != null)
-            {
-                dgvTestLog.Parent.Controls.Add(_testStatusStrip);
-                _testStatusStrip.BringToFront();
+                toolStripProgressBarTest.Minimum = 0;
+                toolStripProgressBarTest.Maximum = 100;
+                toolStripProgressBarTest.Value = 0;
+                toolStripProgressBarTest.Style = ProgressBarStyle.Blocks;
             }
 
-            _testTimer = new Timer
-            {
-                Interval = 500
-            };
-            _testTimer.Tick += TestTimer_Tick;
+            if (toolStripStatusLabelElapsed != null)
+                toolStripStatusLabelElapsed.Text = "Elapsed: 00:00";
 
             comboTestCategory.SelectedIndexChanged += comboTestCategory_SelectedIndexChanged;
             btnRunTest.Click += btnRunTest_Click;
@@ -680,23 +636,23 @@ namespace SKAIChips_Verification_Tool
 
             _testStartTime = DateTime.Now;
 
-            if (_testStatusLabel != null)
+            if (toolStripStatusLabelTestStatus != null)
             {
-                _testStatusLabel.Text = $"Running: {info.Name}";
+                toolStripStatusLabelTestStatus.Text = $"Running: {info.Name}";
             }
 
-            if (_testProgressBar != null)
+            if (toolStripProgressBarTest != null)
             {
-                _testProgressBar.Style = ProgressBarStyle.Marquee;
-                _testProgressBar.MarqueeAnimationSpeed = 50;
+                toolStripProgressBarTest.Style = ProgressBarStyle.Marquee;
+                toolStripProgressBarTest.MarqueeAnimationSpeed = 50;
             }
 
-            if (_testElapsedLabel != null)
+            if (toolStripStatusLabelElapsed != null)
             {
-                _testElapsedLabel.Text = "Elapsed: 00:00";
+                toolStripStatusLabelElapsed.Text = "Elapsed: 00:00";
             }
 
-            _testTimer?.Start();
+            testTimer?.Start();
 
             try
             {
@@ -736,17 +692,18 @@ namespace SKAIChips_Verification_Tool
                 _testCts?.Dispose();
                 _testCts = null;
 
-                _testTimer?.Stop();
+                testTimer?.Stop();
 
-                if (_testProgressBar != null)
+                if (toolStripProgressBarTest != null)
                 {
-                    _testProgressBar.Style = ProgressBarStyle.Blocks;
-                    _testProgressBar.Value = 0;
+                    toolStripProgressBarTest.Style = ProgressBarStyle.Blocks;
+                    toolStripProgressBarTest.MarqueeAnimationSpeed = 0;
+                    toolStripProgressBarTest.Value = 0;
                 }
 
-                if (_testStatusLabel != null)
+                if (toolStripStatusLabelTestStatus != null)
                 {
-                    _testStatusLabel.Text = "Idle";
+                    toolStripStatusLabelTestStatus.Text = "Idle";
                 }
 
                 btnRunTest.Enabled = _testSuite != null && comboTests.Items.Count > 0;
@@ -762,27 +719,31 @@ namespace SKAIChips_Verification_Tool
             _testCts?.Cancel();
             btnStopTest.Enabled = false;
 
-            _testTimer?.Stop();
+            testTimer?.Stop();
 
-            if (_testProgressBar != null)
+            if (toolStripProgressBarTest != null)
             {
-                _testProgressBar.Style = ProgressBarStyle.Blocks;
-                _testProgressBar.Value = 0;
+                toolStripProgressBarTest.Style = ProgressBarStyle.Blocks;
+                toolStripProgressBarTest.MarqueeAnimationSpeed = 0;
+                toolStripProgressBarTest.Value = 0;
             }
 
-            if (_testStatusLabel != null)
+            if (toolStripStatusLabelTestStatus != null)
             {
-                _testStatusLabel.Text = "Stopped";
+                toolStripStatusLabelTestStatus.Text = "Stopped";
             }
         }
 
-        private void TestTimer_Tick(object sender, EventArgs e)
+        private void testTimer_Tick(object sender, EventArgs e)
         {
             if (!_isRunningTest)
                 return;
 
             var elapsed = DateTime.Now - _testStartTime;
-            _testElapsedLabel.Text = $"Elapsed: {elapsed:hh\\:mm\\:ss}";
+            if (toolStripStatusLabelElapsed != null)
+            {
+                toolStripStatusLabelElapsed.Text = $"Elapsed: {elapsed:hh\\:mm\\:ss}";
+            }
         }
 
         private void AddTestLogRow(string level, string message)

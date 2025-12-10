@@ -58,6 +58,12 @@ namespace SKAIChips_Verification_Tool
         private Button btnRunTest;
         private Button btnStopTest;
         private DataGridView dgvTestLog;
+        private StatusStrip statusStripTest;
+        private ToolStripStatusLabel toolStripStatusLabelTestStatus;
+        private ToolStripProgressBar toolStripProgressBarTest;
+        private ToolStripStatusLabel toolStripStatusLabelSpacer;
+        private ToolStripStatusLabel toolStripStatusLabelElapsed;
+        private System.Windows.Forms.Timer testTimer;
 
         protected override void Dispose(bool disposing)
         {
@@ -120,11 +126,18 @@ namespace SKAIChips_Verification_Tool
             btnRunTest = new Button();
             btnStopTest = new Button();
             dgvTestLog = new DataGridView();
+            statusStripTest = new StatusStrip();
+            toolStripStatusLabelTestStatus = new ToolStripStatusLabel();
+            toolStripProgressBarTest = new ToolStripProgressBar();
+            toolStripStatusLabelSpacer = new ToolStripStatusLabel();
+            toolStripStatusLabelElapsed = new ToolStripStatusLabel();
+            testTimer = new System.Windows.Forms.Timer(components);
 
             ((System.ComponentModel.ISupportInitialize)dgvLog).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvBits).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numRegIndex).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvTestLog).BeginInit();
+            statusStripTest.SuspendLayout();
             groupSetup.SuspendLayout();
             groupRegMap.SuspendLayout();
             groupRegCont.SuspendLayout();
@@ -510,6 +523,7 @@ namespace SKAIChips_Verification_Tool
             // Run Test Group
             grpRunTest.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             grpRunTest.Controls.Add(dgvTestLog);
+            grpRunTest.Controls.Add(statusStripTest);
             grpRunTest.Controls.Add(btnStopTest);
             grpRunTest.Controls.Add(btnRunTest);
             grpRunTest.Controls.Add(comboTests);
@@ -547,6 +561,42 @@ namespace SKAIChips_Verification_Tool
             btnStopTest.Text = "Stop";
             btnStopTest.UseVisualStyleBackColor = true;
 
+            statusStripTest.Dock = DockStyle.Top;
+            statusStripTest.Items.AddRange(new ToolStripItem[]
+            {
+                toolStripStatusLabelTestStatus,
+                toolStripProgressBarTest,
+                toolStripStatusLabelSpacer,
+                toolStripStatusLabelElapsed
+            });
+            statusStripTest.Location = new Point(3, 43);
+            statusStripTest.Name = "statusStripTest";
+            statusStripTest.Size = new Size(579, 22);
+            statusStripTest.SizingGrip = false;
+            statusStripTest.TabIndex = 4;
+            statusStripTest.Text = "statusStripTest";
+
+            toolStripStatusLabelTestStatus.Name = "toolStripStatusLabelTestStatus";
+            toolStripStatusLabelTestStatus.Size = new Size(29, 17);
+            toolStripStatusLabelTestStatus.Text = "Idle";
+
+            toolStripProgressBarTest.Name = "toolStripProgressBarTest";
+            toolStripProgressBarTest.Size = new Size(100, 16);
+            toolStripProgressBarTest.Style = ProgressBarStyle.Blocks;
+
+            toolStripStatusLabelSpacer.Name = "toolStripStatusLabelSpacer";
+            toolStripStatusLabelSpacer.Size = new Size(429, 17);
+            toolStripStatusLabelSpacer.Spring = true;
+
+            toolStripStatusLabelElapsed.Name = "toolStripStatusLabelElapsed";
+            toolStripStatusLabelElapsed.Size = new Size(91, 17);
+            toolStripStatusLabelElapsed.Text = "Elapsed: 00:00";
+            toolStripStatusLabelElapsed.TextAlign = ContentAlignment.MiddleRight;
+
+            testTimer.Enabled = false;
+            testTimer.Interval = 500;
+            testTimer.Tick += testTimer_Tick;
+
             dgvTestLog.AllowUserToAddRows = false;
             dgvTestLog.AllowUserToDeleteRows = false;
             dgvTestLog.ReadOnly = true;
@@ -554,10 +604,10 @@ namespace SKAIChips_Verification_Tool
             dgvTestLog.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvTestLog.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvTestLog.Dock = DockStyle.Bottom;
-            dgvTestLog.Location = new Point(3, 60);
+            dgvTestLog.Location = new Point(3, 65);
             dgvTestLog.Name = "dgvTestLog";
-            dgvTestLog.Size = new Size(579, 157);
-            dgvTestLog.TabIndex = 4;
+            dgvTestLog.Size = new Size(579, 152);
+            dgvTestLog.TabIndex = 5;
 
             // Form
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -578,6 +628,8 @@ namespace SKAIChips_Verification_Tool
             ((System.ComponentModel.ISupportInitialize)dgvBits).EndInit();
             ((System.ComponentModel.ISupportInitialize)numRegIndex).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvTestLog).EndInit();
+            statusStripTest.ResumeLayout(false);
+            statusStripTest.PerformLayout();
             groupSetup.ResumeLayout(false);
             groupSetup.PerformLayout();
             groupRegMap.ResumeLayout(false);
