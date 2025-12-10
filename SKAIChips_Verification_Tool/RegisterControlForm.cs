@@ -41,7 +41,6 @@ namespace SKAIChips_Verification_Tool
         private bool _isUpdatingBits;
 
         private readonly Dictionary<Register, uint> _regValues = new();
-        private readonly Dictionary<uint, Register> _addrToRegister = new();
 
         #endregion
 
@@ -59,41 +58,59 @@ namespace SKAIChips_Verification_Tool
 
         private void InitUi()
         {
+            InitLogGrid();
+            InitBitsGrid();
+            InitTreeContextMenu();
+            InitBitButtons();
+            InitBitButtonLayoutHandlers();
+            InitRegisterMapControls();
+            InitRegisterValueControls();
+            InitScriptControls();
+            InitStatusControls();
+
+            LoadProjects();
+        }
+
+        private void InitLogGrid()
+        {
             dgvLog.Rows.Clear();
+        }
 
-            if (dgvBits != null)
+        private void InitBitsGrid()
+        {
+            if (dgvBits == null)
+                return;
+
+            dgvBits.AutoGenerateColumns = false;
+            dgvBits.Columns.Clear();
+
+            var colBit = new DataGridViewTextBoxColumn { Name = "colBit", HeaderText = "Bit", ReadOnly = true };
+            var colName = new DataGridViewTextBoxColumn { Name = "colName", HeaderText = "Name", ReadOnly = true };
+            var colDefault = new DataGridViewTextBoxColumn { Name = "colDefault", HeaderText = "Default", ReadOnly = true };
+            var colCurrent = new DataGridViewTextBoxColumn { Name = "colCurrent", HeaderText = "Current", ReadOnly = false };
+            var colDesc = new DataGridViewTextBoxColumn
             {
-                dgvBits.AutoGenerateColumns = false;
-                dgvBits.Columns.Clear();
+                Name = "colDesc",
+                HeaderText = "Description",
+                ReadOnly = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+            };
 
-                var colBit = new DataGridViewTextBoxColumn { Name = "colBit", HeaderText = "Bit", ReadOnly = true };
-                var colName = new DataGridViewTextBoxColumn { Name = "colName", HeaderText = "Name", ReadOnly = true };
-                var colDefault = new DataGridViewTextBoxColumn { Name = "colDefault", HeaderText = "Default", ReadOnly = true };
-                var colCurrent = new DataGridViewTextBoxColumn { Name = "colCurrent", HeaderText = "Current", ReadOnly = false };
-                var colDesc = new DataGridViewTextBoxColumn
-                {
-                    Name = "colDesc",
-                    HeaderText = "Description",
-                    ReadOnly = true,
-                    AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
-                };
+            dgvBits.Columns.Add(colBit);
+            dgvBits.Columns.Add(colName);
+            dgvBits.Columns.Add(colDefault);
+            dgvBits.Columns.Add(colCurrent);
+            dgvBits.Columns.Add(colDesc);
 
-                dgvBits.Columns.Add(colBit);
-                dgvBits.Columns.Add(colName);
-                dgvBits.Columns.Add(colDefault);
-                dgvBits.Columns.Add(colCurrent);
-                dgvBits.Columns.Add(colDesc);
+            dgvBits.CellEndEdit += dgvBits_CellEndEdit;
+        }
 
-                dgvBits.CellEndEdit += dgvBits_CellEndEdit;
-            }
-
-            lblMapFileName.Text = "(No file)";
-            btnOpenMapPath.Enabled = false;
-
+        private void InitTreeContextMenu()
+        {
             var ctx = new ContextMenuStrip();
-            var mExpand = new ToolStripMenuItem("¸ðµÎ ÆîÄ¡±â");
-            var mCollapse = new ToolStripMenuItem("¸ðµÎ Á¢±â");
-            var mSearch = new ToolStripMenuItem("°Ë»ö...");
+            var mExpand = new ToolStripMenuItem("ëª¨ë‘ íŽ¼ì¹˜ê¸°");
+            var mCollapse = new ToolStripMenuItem("ëª¨ë‘ ì ‘ê¸°");
+            var mSearch = new ToolStripMenuItem("ê²€ìƒ‰...");
 
             mExpand.Click += (s, e) => tvRegs.ExpandAll();
             mCollapse.Click += (s, e) => tvRegs.CollapseAll();
@@ -104,38 +121,6 @@ namespace SKAIChips_Verification_Tool
             ctx.Items.Add(new ToolStripSeparator());
             ctx.Items.Add(mSearch);
             tvRegs.ContextMenuStrip = ctx;
-
-            InitBitButtons();
-            UpdateBitButtonsFromValue(_currentRegValue);
-            SetBitButtonsEnabledForItem(null);
-
-            flowBitsTop.SizeChanged += (s, e) => UpdateBitButtonLayout();
-            flowBitsBottom.SizeChanged += (s, e) => UpdateBitButtonLayout();
-            groupRegCont.Resize += (s, e) => UpdateBitButtonLayout();
-
-            txtRegValueHex.Leave += txtRegValueHex_Leave;
-
-            btnWriteAll.Click += btnWriteAll_Click;
-            btnReadAll.Click += btnReadAll_Click;
-
-            LoadProjects();
-            UpdateStatusText();
-
-            btnConnect.Text = "Connect";
-
-            lblRegName.Text = "(No Register)";
-            lblRegAddrSummary.Text = "Address: -";
-            lblRegResetSummary.Text = "Reset Value: -";
-            txtRegValueHex.Text = "0x00000000";
-
-            numRegIndex.Minimum = 0;
-            numRegIndex.Maximum = 0;
-            numRegIndex.Value = 0;
-            numRegIndex.Enabled = false;
-            numRegIndex.ValueChanged += numRegIndex_ValueChanged;
-
-            lblScriptFileName.Text = "(No script)";
-            btnOpenScriptPath.Enabled = false;
         }
 
         private void InitBitButtons()
@@ -168,6 +153,13 @@ namespace SKAIChips_Verification_Tool
 
             UpdateBitButtonsFromValue(_currentRegValue);
             UpdateBitButtonLayout();
+        }
+
+        private void InitBitButtonLayoutHandlers()
+        {
+            flowBitsTop.SizeChanged += (s, e) => UpdateBitButtonLayout();
+            flowBitsBottom.SizeChanged += (s, e) => UpdateBitButtonLayout();
+            groupRegCont.Resize += (s, e) => UpdateBitButtonLayout();
         }
 
         private void UpdateBitButtonLayout()
@@ -207,6 +199,46 @@ namespace SKAIChips_Verification_Tool
                     btn.Height = btnHeight;
                 }
             }
+        }
+
+        private void InitRegisterMapControls()
+        {
+            lblMapFileName.Text = "(No file)";
+            btnOpenMapPath.Enabled = false;
+        }
+
+        private void InitRegisterValueControls()
+        {
+            UpdateBitButtonsFromValue(_currentRegValue);
+            SetBitButtonsEnabledForItem(null);
+
+            txtRegValueHex.Leave += txtRegValueHex_Leave;
+
+            btnWriteAll.Click += btnWriteAll_Click;
+            btnReadAll.Click += btnReadAll_Click;
+
+            lblRegName.Text = "(No Register)";
+            lblRegAddrSummary.Text = "Address: -";
+            lblRegResetSummary.Text = "Reset Value: -";
+            txtRegValueHex.Text = "0x00000000";
+
+            numRegIndex.Minimum = 0;
+            numRegIndex.Maximum = 0;
+            numRegIndex.Value = 0;
+            numRegIndex.Enabled = false;
+            numRegIndex.ValueChanged += numRegIndex_ValueChanged;
+        }
+
+        private void InitScriptControls()
+        {
+            lblScriptFileName.Text = "(No script)";
+            btnOpenScriptPath.Enabled = false;
+        }
+
+        private void InitStatusControls()
+        {
+            btnConnect.Text = "Connect";
+            UpdateStatusText();
         }
 
         #endregion
@@ -263,14 +295,14 @@ namespace SKAIChips_Verification_Tool
 
         private void ShowTreeSearchDialog()
         {
-            string text = PromptText("Register °Ë»ö", "°Ë»öÇÒ ÅØ½ºÆ®¸¦ ÀÔ·ÂÇÏ¼¼¿ä:", "");
+            string text = PromptText("Register ê²€ìƒ‰", "ê²€ìƒ‰í•  í…ìŠ¤íŠ¸ë¥¼ ìž…ë ¥í•˜ì„¸ìš”:", "");
             if (string.IsNullOrWhiteSpace(text))
                 return;
 
             var node = FindTreeNodeContains(tvRegs.Nodes, text);
             if (node == null)
             {
-                MessageBox.Show("ÀÏÄ¡ÇÏ´Â Ç×¸ñÀÌ ¾ø½À´Ï´Ù.");
+                MessageBox.Show("ì¼ì¹˜í•˜ëŠ” í•­ëª©ì´ ì—†ìŠµë‹ˆë‹¤.");
                 return;
             }
 
@@ -445,7 +477,7 @@ namespace SKAIChips_Verification_Tool
         {
             if (_selectedProject == null)
             {
-                MessageBox.Show("ÇÁ·ÎÁ§Æ®¸¦ ¼±ÅÃÇÏ¼¼¿ä.");
+                MessageBox.Show("í”„ë¡œì íŠ¸ë¥¼ ì„ íƒí•˜ì„¸ìš”.");
                 return;
             }
 
@@ -455,13 +487,13 @@ namespace SKAIChips_Verification_Tool
             {
                 if (_ftdiSettings == null)
                 {
-                    MessageBox.Show("FTDI Àåºñ ¼Â¾÷ÀÌ ÇÊ¿äÇÕ´Ï´Ù.");
+                    MessageBox.Show("FTDI ìž¥ë¹„ ì…‹ì—…ì´ í•„ìš”í•©ë‹ˆë‹¤.");
                     return;
                 }
 
                 if (_protocolSettings == null)
                 {
-                    MessageBox.Show("ÇÁ·ÎÅäÄÝ ¼Â¾÷ÀÌ ÇÊ¿äÇÕ´Ï´Ù.");
+                    MessageBox.Show("í”„ë¡œí† ì½œ ì…‹ì—…ì´ í•„ìš”í•©ë‹ˆë‹¤.");
                     return;
                 }
 
@@ -469,7 +501,7 @@ namespace SKAIChips_Verification_Tool
                 {
                     if (!_protocolSettings.I2cSlaveAddress.HasValue)
                     {
-                        MessageBox.Show("I2C Slave Address°¡ ¼³Á¤µÇÁö ¾Ê¾Ò½À´Ï´Ù.");
+                        MessageBox.Show("I2C Slave Addressê°€ ì„¤ì •ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.");
                         return;
                     }
 
@@ -481,7 +513,7 @@ namespace SKAIChips_Verification_Tool
                 }
                 else
                 {
-                    MessageBox.Show("ÇØ´ç ÇÁ·ÎÅäÄÝÀº ¾ÆÁ÷ ±¸ÇöµÇÁö ¾Ê¾Ò½À´Ï´Ù.");
+                    MessageBox.Show("í•´ë‹¹ í”„ë¡œí† ì½œì€ ì•„ì§ êµ¬í˜„ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.");
                     return;
                 }
             }
@@ -495,7 +527,7 @@ namespace SKAIChips_Verification_Tool
                 if (!_bus.Connect())
                 {
                     _bus = null;
-                    MessageBox.Show(isMockProject ? "Mock ¿¬°á ½ÇÆÐ" : "FTDI ¿¬°á ½ÇÆÐ");
+                    MessageBox.Show(isMockProject ? "Mock ì—°ê²° ì‹¤íŒ¨" : "FTDI ì—°ê²° ì‹¤íŒ¨");
                     UpdateStatusText();
                     return;
                 }
@@ -508,7 +540,7 @@ namespace SKAIChips_Verification_Tool
             catch (Exception ex)
             {
                 DisconnectBus();
-                MessageBox.Show("¿¬°á Áß ¿À·ù: " + ex.Message);
+                MessageBox.Show("ì—°ê²° ì¤‘ ì˜¤ë¥˜: " + ex.Message);
             }
         }
 
@@ -554,7 +586,7 @@ namespace SKAIChips_Verification_Tool
         {
             if (_selectedProject == null)
             {
-                MessageBox.Show("¸ÕÀú ÇÁ·ÎÁ§Æ®¸¦ ¼±ÅÃÇÏ¼¼¿ä.");
+                MessageBox.Show("ë¨¼ì € í”„ë¡œì íŠ¸ë¥¼ ì„ íƒí•˜ì„¸ìš”.");
                 return;
             }
 
@@ -670,248 +702,14 @@ namespace SKAIChips_Verification_Tool
             }
             else
             {
-                MessageBox.Show("·¹Áö½ºÅÍ °ª Çü½ÄÀÌ Àß¸øµÇ¾ú½À´Ï´Ù. ¿¹: 0x00000000");
+                MessageBox.Show("ë ˆì§€ìŠ¤í„° ê°’ í˜•ì‹ì´ ìž˜ëª»ë˜ì—ˆìŠµë‹ˆë‹¤. ì˜ˆ: 0x00000000");
                 txtRegValueHex.Text = $"0x{_currentRegValue:X8}";
             }
         }
 
         #endregion
 
-        #region Read / Write
-
-        private async void btnRead_Click(object sender, EventArgs e)
-        {
-            if (_chip == null)
-            {
-                MessageBox.Show("¸ÕÀú Connect ÇÏ¼¼¿ä.");
-                return;
-            }
-
-            if (_selectedRegister == null)
-            {
-                MessageBox.Show("¸ÕÀú ·¹Áö½ºÅÍ¸¦ ¼±ÅÃÇÏ¼¼¿ä.");
-                return;
-            }
-
-            uint addr = _selectedRegister.Address;
-
-            try
-            {
-                var result = await RunWithTimeout(() => _chip.ReadRegister(addr), I2cTimeoutMs);
-
-                if (!result.success)
-                {
-                    AddLog("READ", $"0x{addr:X8}", "", "TIMEOUT");
-                    return;
-                }
-
-                uint data = result.result;
-                _currentRegValue = data;
-
-                AddLog("READ", $"0x{addr:X8}", $"0x{data:X8}", "OK");
-
-                UpdateBitCurrentValues();
-            }
-            catch (Exception ex)
-            {
-                AddLog("READ", $"0x{addr:X8}", "", "ERR");
-                MessageBox.Show(ex.Message, "Read Error");
-            }
-        }
-
-        private async void btnWrite_Click(object sender, EventArgs e)
-        {
-            if (_chip == null)
-            {
-                MessageBox.Show("¸ÕÀú Connect ÇÏ¼¼¿ä.");
-                return;
-            }
-
-            if (_selectedRegister == null)
-            {
-                MessageBox.Show("¸ÕÀú ·¹Áö½ºÅÍ¸¦ ¼±ÅÃÇÏ¼¼¿ä.");
-                return;
-            }
-
-            uint addr = _selectedRegister.Address;
-            uint newValue;
-
-            if (dgvBits.SelectedRows.Count > 0 && dgvBits.SelectedRows[0].Tag is RegisterItem selItem)
-            {
-                var row = dgvBits.SelectedRows[0];
-                int width = selItem.UpperBit - selItem.LowerBit + 1;
-
-                if (!TryParseFieldValue(row.Cells["colCurrent"].Value, width, out uint fieldVal))
-                {
-                    MessageBox.Show("Current °ª Çü½ÄÀÌ Àß¸øµÇ¾ú½À´Ï´Ù. ¿¹: 0x1");
-                    return;
-                }
-
-                uint baseValue = _currentRegValue;
-                uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << selItem.LowerBit;
-                newValue = baseValue;
-                newValue &= ~mask;
-                newValue |= (fieldVal << selItem.LowerBit);
-            }
-            else if (_selectedRegister != null && dgvBits.Rows.Count > 0)
-            {
-                uint baseValue = _currentRegValue;
-                newValue = baseValue;
-
-                foreach (DataGridViewRow r in dgvBits.Rows)
-                {
-                    if (r.Tag is not RegisterItem item)
-                        continue;
-
-                    int width = item.UpperBit - item.LowerBit + 1;
-                    var cell = r.Cells["colCurrent"].Value;
-
-                    if (cell == null || string.IsNullOrWhiteSpace(cell.ToString()))
-                        continue;
-
-                    if (!TryParseFieldValue(cell, width, out uint fieldVal))
-                        continue;
-
-                    uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << item.LowerBit;
-                    newValue &= ~mask;
-                    newValue |= (fieldVal << item.LowerBit);
-                }
-            }
-            else
-            {
-                if (!TryParseHexUInt(txtRegValueHex.Text, out newValue))
-                {
-                    MessageBox.Show("·¹Áö½ºÅÍ °ª Çü½ÄÀÌ Àß¸øµÇ¾ú½À´Ï´Ù. ¿¹: 0x00000001");
-                    return;
-                }
-            }
-
-            try
-            {
-                bool success = await RunWithTimeout(() =>
-                {
-                    _chip.WriteRegister(addr, newValue);
-                }, I2cTimeoutMs);
-
-                if (!success)
-                {
-                    AddLog("WRITE", $"0x{addr:X8}", $"0x{newValue:X8}", "TIMEOUT");
-                    return;
-                }
-
-                _currentRegValue = newValue;
-                AddLog("WRITE", $"0x{addr:X8}", $"0x{newValue:X8}", "OK");
-                UpdateBitCurrentValues();
-            }
-            catch (Exception ex)
-            {
-                AddLog("WRITE", $"0x{addr:X8}", $"0x{newValue:X8}", "ERR");
-                MessageBox.Show(ex.Message, "Write Error");
-            }
-        }
-
-        private async void btnWriteAll_Click(object sender, EventArgs e)
-        {
-            if (_chip == null)
-            {
-                MessageBox.Show("¸ÕÀú Connect ÇÏ¼¼¿ä.");
-                return;
-            }
-
-            if (_groups == null || _groups.Count == 0)
-            {
-                MessageBox.Show("¸ÕÀú Register Tree¸¦ ·ÎµåÇÏ¼¼¿ä.");
-                return;
-            }
-
-            foreach (var group in _groups)
-            {
-                foreach (var reg in group.Registers)
-                {
-                    uint addr = reg.Address;
-                    uint data = GetRegisterValue(reg);
-
-                    try
-                    {
-                        bool success = await RunWithTimeout(() =>
-                        {
-                            _chip.WriteRegister(addr, data);
-                        }, I2cTimeoutMs);
-
-                        if (!success)
-                        {
-                            AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "TIMEOUT");
-                            continue;
-                        }
-
-                        _regValues[reg] = data;
-                        AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "OK");
-                    }
-                    catch (Exception ex)
-                    {
-                        AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "ERR");
-                        Debug.WriteLine(ex);
-                    }
-                }
-            }
-
-            if (_selectedRegister != null)
-            {
-                _currentRegValue = GetRegisterValue(_selectedRegister);
-                UpdateBitCurrentValues();
-            }
-        }
-
-        private async void btnReadAll_Click(object sender, EventArgs e)
-        {
-            if (_chip == null)
-            {
-                MessageBox.Show("¸ÕÀú Connect ÇÏ¼¼¿ä.");
-                return;
-            }
-
-            if (_groups == null || _groups.Count == 0)
-            {
-                MessageBox.Show("¸ÕÀú Register Tree¸¦ ·ÎµåÇÏ¼¼¿ä.");
-                return;
-            }
-
-            foreach (var group in _groups)
-            {
-                foreach (var reg in group.Registers)
-                {
-                    uint addr = reg.Address;
-
-                    try
-                    {
-                        var result = await RunWithTimeout(() => _chip.ReadRegister(addr), I2cTimeoutMs);
-
-                        if (!result.success)
-                        {
-                            AddLog("READ_ALL", $"0x{addr:X8}", "", "TIMEOUT");
-                            continue;
-                        }
-
-                        uint data = result.result;
-                        _regValues[reg] = data;
-                        AddLog("READ_ALL", $"0x{addr:X8}", $"0x{data:X8}", "OK");
-                    }
-                    catch (Exception ex)
-                    {
-                        AddLog("READ_ALL", $"0x{addr:X8}", "", "ERR");
-                        Debug.WriteLine(ex);
-                    }
-                }
-            }
-
-            if (_selectedRegister != null)
-            {
-                _currentRegValue = GetRegisterValue(_selectedRegister);
-                UpdateBitCurrentValues();
-            }
-        }
-
-        #endregion
+        
 
         #region Register map / Excel
 
@@ -948,7 +746,7 @@ namespace SKAIChips_Verification_Tool
                     _regMapFilePath = null;
                     lblMapFileName.Text = "(No file)";
                     btnOpenMapPath.Enabled = false;
-                    MessageBox.Show("¿¢¼¿ ÆÄÀÏ ¿­±â ½ÇÆÐ: " + ex.Message);
+                    MessageBox.Show("ì—‘ì…€ íŒŒì¼ ì—´ê¸° ì‹¤íŒ¨: " + ex.Message);
                 }
             }
         }
@@ -957,13 +755,13 @@ namespace SKAIChips_Verification_Tool
         {
             if (string.IsNullOrEmpty(_regMapFilePath))
             {
-                MessageBox.Show("¸ÕÀú ¿¢¼¿ ÆÄÀÏÀ» ¼±ÅÃÇÏ¼¼¿ä.");
+                MessageBox.Show("ë¨¼ì € ì—‘ì…€ íŒŒì¼ì„ ì„ íƒí•˜ì„¸ìš”.");
                 return;
             }
 
             if (clbSheets.CheckedItems.Count == 0)
             {
-                MessageBox.Show("·ÎµåÇÒ ½ÃÆ®¸¦ ¼±ÅÃÇÏ¼¼¿ä.");
+                MessageBox.Show("ë¡œë“œí•  ì‹œíŠ¸ë¥¼ ì„ íƒí•˜ì„¸ìš”.");
                 return;
             }
 
@@ -988,7 +786,7 @@ namespace SKAIChips_Verification_Tool
             }
             catch (Exception ex)
             {
-                MessageBox.Show("RegisterMap ·Îµù ½ÇÆÐ: " + ex.Message);
+                MessageBox.Show("RegisterMap ë¡œë”© ì‹¤íŒ¨: " + ex.Message);
             }
         }
 
@@ -996,7 +794,7 @@ namespace SKAIChips_Verification_Tool
         {
             if (string.IsNullOrEmpty(_regMapFilePath) || !File.Exists(_regMapFilePath))
             {
-                MessageBox.Show("¿­·Á ÀÖ´Â ·¹Áö½ºÅÍ¸Ê ÆÄÀÏÀÌ ¾ø½À´Ï´Ù.");
+                MessageBox.Show("ì—´ë ¤ ìžˆëŠ” ë ˆì§€ìŠ¤í„°ë§µ íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.");
                 return;
             }
 
@@ -1007,14 +805,13 @@ namespace SKAIChips_Verification_Tool
             }
             catch (Exception ex)
             {
-                MessageBox.Show("°æ·Î ¿ÀÇÂ ½ÇÆÐ: " + ex.Message);
+                MessageBox.Show("ê²½ë¡œ ì˜¤í”ˆ ì‹¤íŒ¨: " + ex.Message);
             }
         }
 
         private void BuildRegisterTree()
         {
             tvRegs.Nodes.Clear();
-            _addrToRegister.Clear();
 
             foreach (var g in _groups)
             {
@@ -1029,8 +826,6 @@ namespace SKAIChips_Verification_Tool
                     {
                         Tag = reg
                     };
-
-                    _addrToRegister[reg.Address] = reg;
 
                     foreach (var item in reg.Items)
                     {
@@ -1065,20 +860,6 @@ namespace SKAIChips_Verification_Tool
             tvRegs.EndUpdate();
         }
 
-        private void OnRegisterUpdatedFromAutoTask(uint addr, uint value)
-        {
-            if (!_addrToRegister.TryGetValue(addr, out var reg))
-                return;
-
-            _regValues[reg] = value;
-
-            if (!ReferenceEquals(reg, _selectedRegister))
-                return;
-
-            _currentRegValue = value;
-            UpdateBitCurrentValues();
-        }
-
         private uint GetRegisterValue(Register reg)
         {
             if (reg == null)
@@ -1094,124 +875,121 @@ namespace SKAIChips_Verification_Tool
 
         private void tvRegs_AfterSelect(object sender, TreeViewEventArgs e)
         {
-            _selectedGroup = null;
-            _selectedRegister = null;
-            _selectedItem = null;
+            ResetSelectionState();
 
-            if (e.Node?.Tag is RegisterGroup g)
+            if (e.Node?.Tag is RegisterGroup group)
             {
-                _selectedGroup = g;
-
-                dgvBits.Rows.Clear();
-                lblRegName.Text = "(Group Selected)";
-                lblRegAddrSummary.Text = "Address: -";
-                lblRegResetSummary.Text = "Reset Value: -";
-                _currentRegValue = 0;
-                UpdateBitCurrentValues();
-
-                SetBitButtonsEnabledForItem(null);
-                UpdateNumRegIndexForSelectedItem();
+                HandleGroupSelection(group);
                 return;
             }
 
-            if (e.Node?.Tag is Register reg)
+            if (e.Node?.Tag is Register register)
             {
-                if (e.Node.Parent?.Tag is RegisterGroup pg)
-                    _selectedGroup = pg;
-
-                _selectedRegister = reg;
-                _selectedItem = null;
-
-                lblRegName.Text = reg.Name;
-                lblRegAddrSummary.Text = $"Address: 0x{reg.Address:X8}";
-                lblRegResetSummary.Text = $"Reset Value: 0x{reg.ResetValue:X8}";
-
-                dgvBits.Rows.Clear();
-
-                foreach (var item in reg.Items)
-                {
-                    int rowIndex = dgvBits.Rows.Add();
-                    var row = dgvBits.Rows[rowIndex];
-
-                    string bitText = item.UpperBit == item.LowerBit
-                        ? item.UpperBit.ToString()
-                        : $"{item.UpperBit}:{item.LowerBit}";
-
-                    row.Cells["colBit"].Value = bitText;
-                    row.Cells["colName"].Value = item.Name;
-                    row.Cells["colDefault"].Value = $"0x{item.DefaultValue:X}";
-                    row.Cells["colCurrent"].Value = "";
-                    row.Cells["colDesc"].Value = item.Description;
-
-                    row.Tag = item;
-                }
-
-                _currentRegValue = GetRegisterValue(reg);
-                UpdateBitCurrentValues();
-
-                SetBitButtonsEnabledForItem(null);
-                UpdateNumRegIndexForSelectedItem();
+                HandleRegisterSelection(register, e.Node.Parent?.Tag as RegisterGroup);
+                return;
             }
-            else if (e.Node?.Tag is RegisterItem item)
+
+            if (e.Node?.Tag is RegisterItem item)
             {
-                if (e.Node.Parent?.Tag is Register parentReg)
-                {
-                    if (e.Node.Parent.Parent?.Tag is RegisterGroup pg)
-                        _selectedGroup = pg;
-
-                    _selectedRegister = parentReg;
-                    _selectedItem = item;
-
-                    lblRegName.Text = parentReg.Name;
-                    lblRegAddrSummary.Text = $"Address: 0x{parentReg.Address:X8}";
-                    lblRegResetSummary.Text = $"Reset Value: 0x{parentReg.ResetValue:X8}";
-
-                    dgvBits.Rows.Clear();
-
-                    foreach (var it in parentReg.Items)
-                    {
-                        int rowIndex = dgvBits.Rows.Add();
-                        var row = dgvBits.Rows[rowIndex];
-
-                        string bitText = it.UpperBit == it.LowerBit
-                            ? it.UpperBit.ToString()
-                            : $"{it.UpperBit}:{it.LowerBit}";
-
-                        row.Cells["colBit"].Value = bitText;
-                        row.Cells["colName"].Value = it.Name;
-                        row.Cells["colDefault"].Value = $"0x{it.DefaultValue:X}";
-                        row.Cells["colCurrent"].Value = "";
-                        row.Cells["colDesc"].Value = it.Description;
-
-                        row.Tag = it;
-
-                        if (ReferenceEquals(it, item))
-                            row.Selected = true;
-                    }
-
-                    _currentRegValue = GetRegisterValue(parentReg);
-                    UpdateBitCurrentValues();
-
-                    SetBitButtonsEnabledForItem(item);
-                    UpdateNumRegIndexForSelectedItem();
-                }
+                HandleItemSelection(item, e.Node?.Parent?.Tag as Register, e.Node?.Parent?.Parent?.Tag as RegisterGroup);
+                return;
             }
-            else
+
+            ShowNoSelectionState();
+        }
+
+        private void ResetSelectionState()
+        {
+            _selectedGroup = null;
+            _selectedRegister = null;
+            _selectedItem = null;
+        }
+
+        private void HandleGroupSelection(RegisterGroup group)
+        {
+            _selectedGroup = group;
+
+            dgvBits.Rows.Clear();
+            lblRegName.Text = "(Group Selected)";
+            lblRegAddrSummary.Text = "Address: -";
+            lblRegResetSummary.Text = "Reset Value: -";
+
+            _currentRegValue = 0;
+            UpdateBitCurrentValues();
+
+            SetBitButtonsEnabledForItem(null);
+            UpdateNumRegIndexForSelectedItem();
+        }
+
+        private void HandleRegisterSelection(Register register, RegisterGroup parentGroup)
+        {
+            _selectedGroup = parentGroup;
+            LoadRegisterToUi(register, null);
+        }
+
+        private void HandleItemSelection(RegisterItem item, Register parentRegister, RegisterGroup parentGroup)
+        {
+            _selectedGroup = parentGroup;
+            LoadRegisterToUi(parentRegister, item);
+        }
+
+        private void ShowNoSelectionState()
+        {
+            dgvBits.Rows.Clear();
+            lblRegName.Text = "(No Register)";
+            lblRegAddrSummary.Text = "Address: -";
+            lblRegResetSummary.Text = "Reset Value: -";
+
+            _currentRegValue = 0;
+            UpdateBitCurrentValues();
+
+            SetBitButtonsEnabledForItem(null);
+            UpdateNumRegIndexForSelectedItem();
+        }
+
+        private void LoadRegisterToUi(Register register, RegisterItem selectedItem)
+        {
+            if (register == null)
             {
-                _selectedGroup = null;
-                _selectedRegister = null;
-                _selectedItem = null;
-
-                dgvBits.Rows.Clear();
-                lblRegName.Text = "(No Register)";
-                lblRegAddrSummary.Text = "Address: -";
-                lblRegResetSummary.Text = "Reset Value: -";
-                _currentRegValue = 0;
-                UpdateBitCurrentValues();
-
-                SetBitButtonsEnabledForItem(null);
-                UpdateNumRegIndexForSelectedItem();
+                ShowNoSelectionState();
+                return;
             }
+
+            _selectedRegister = register;
+            _selectedItem = selectedItem;
+
+            lblRegName.Text = register.Name;
+            lblRegAddrSummary.Text = $"Address: 0x{register.Address:X8}";
+            lblRegResetSummary.Text = $"Reset Value: 0x{register.ResetValue:X8}";
+
+            dgvBits.Rows.Clear();
+
+            foreach (var item in register.Items)
+            {
+                int rowIndex = dgvBits.Rows.Add();
+                var row = dgvBits.Rows[rowIndex];
+
+                string bitText = item.UpperBit == item.LowerBit
+                    ? item.UpperBit.ToString()
+                    : $"{item.UpperBit}:{item.LowerBit}";
+
+                row.Cells["colBit"].Value = bitText;
+                row.Cells["colName"].Value = item.Name;
+                row.Cells["colDefault"].Value = $"0x{item.DefaultValue:X}";
+                row.Cells["colCurrent"].Value = "";
+                row.Cells["colDesc"].Value = item.Description;
+
+                row.Tag = item;
+
+                if (ReferenceEquals(item, selectedItem))
+                    row.Selected = true;
+            }
+
+            _currentRegValue = GetRegisterValue(register);
+            UpdateBitCurrentValues();
+
+            SetBitButtonsEnabledForItem(selectedItem);
+            UpdateNumRegIndexForSelectedItem();
         }
 
         private void SetBitButtonsEnabledForItem(RegisterItem item)
@@ -1469,13 +1247,249 @@ namespace SKAIChips_Verification_Tool
         {
             if (string.IsNullOrEmpty(_scriptFilePath) || !File.Exists(_scriptFilePath))
             {
-                MessageBox.Show("¿­·Á ÀÖ´Â ½ºÅ©¸³Æ® ÆÄÀÏÀÌ ¾ø½À´Ï´Ù.");
+                MessageBox.Show("ì—´ë ¤ ìžˆëŠ” ìŠ¤í¬ë¦½íŠ¸ íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.");
                 return;
             }
 
             var arg = $"/select,\"{_scriptFilePath}\"";
             Process.Start("explorer.exe", arg);
         }
+
+        #region Read / Write
+
+        private async void btnRead_Click(object sender, EventArgs e)
+        {
+            if (_chip == null)
+            {
+                MessageBox.Show("ë¨¼ì € Connect í•˜ì„¸ìš”.");
+                return;
+            }
+
+            if (_selectedRegister == null)
+            {
+                MessageBox.Show("ë¨¼ì € ë ˆì§€ìŠ¤í„°ë¥¼ ì„ íƒí•˜ì„¸ìš”.");
+                return;
+            }
+
+            uint addr = _selectedRegister.Address;
+
+            try
+            {
+                var result = await RunWithTimeout(() => _chip.ReadRegister(addr), I2cTimeoutMs);
+
+                if (!result.success)
+                {
+                    AddLog("READ", $"0x{addr:X8}", "", "TIMEOUT");
+                    return;
+                }
+
+                uint data = result.result;
+                _currentRegValue = data;
+
+                AddLog("READ", $"0x{addr:X8}", $"0x{data:X8}", "OK");
+
+                UpdateBitCurrentValues();
+            }
+            catch (Exception ex)
+            {
+                AddLog("READ", $"0x{addr:X8}", "", "ERR");
+                MessageBox.Show(ex.Message, "Read Error");
+            }
+        }
+
+        private async void btnWrite_Click(object sender, EventArgs e)
+        {
+            if (_chip == null)
+            {
+                MessageBox.Show("ë¨¼ì € Connect í•˜ì„¸ìš”.");
+                return;
+            }
+
+            if (_selectedRegister == null)
+            {
+                MessageBox.Show("ë¨¼ì € ë ˆì§€ìŠ¤í„°ë¥¼ ì„ íƒí•˜ì„¸ìš”.");
+                return;
+            }
+
+            uint addr = _selectedRegister.Address;
+            uint newValue;
+
+            if (dgvBits.SelectedRows.Count > 0 && dgvBits.SelectedRows[0].Tag is RegisterItem selItem)
+            {
+                var row = dgvBits.SelectedRows[0];
+                int width = selItem.UpperBit - selItem.LowerBit + 1;
+
+                if (!TryParseFieldValue(row.Cells["colCurrent"].Value, width, out uint fieldVal))
+                {
+                    MessageBox.Show("Current ê°’ í˜•ì‹ì´ ìž˜ëª»ë˜ì—ˆìŠµë‹ˆë‹¤. ì˜ˆ: 0x1");
+                    return;
+                }
+
+                uint baseValue = _currentRegValue;
+                uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << selItem.LowerBit;
+                newValue = baseValue;
+                newValue &= ~mask;
+                newValue |= (fieldVal << selItem.LowerBit);
+            }
+            else if (_selectedRegister != null && dgvBits.Rows.Count > 0)
+            {
+                uint baseValue = _currentRegValue;
+                newValue = baseValue;
+
+                foreach (DataGridViewRow r in dgvBits.Rows)
+                {
+                    if (r.Tag is not RegisterItem item)
+                        continue;
+
+                    int width = item.UpperBit - item.LowerBit + 1;
+                    var cell = r.Cells["colCurrent"].Value;
+
+                    if (cell == null || string.IsNullOrWhiteSpace(cell.ToString()))
+                        continue;
+
+                    if (!TryParseFieldValue(cell, width, out uint fieldVal))
+                        continue;
+
+                    uint mask = (width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u)) << item.LowerBit;
+                    newValue &= ~mask;
+                    newValue |= (fieldVal << item.LowerBit);
+                }
+            }
+            else
+            {
+                if (!TryParseHexUInt(txtRegValueHex.Text, out newValue))
+                {
+                    MessageBox.Show("ë ˆì§€ìŠ¤í„° ê°’ í˜•ì‹ì´ ìž˜ëª»ë˜ì—ˆìŠµë‹ˆë‹¤. ì˜ˆ: 0x00000001");
+                    return;
+                }
+            }
+
+            try
+            {
+                bool success = await RunWithTimeout(() =>
+                {
+                    _chip.WriteRegister(addr, newValue);
+                }, I2cTimeoutMs);
+
+                if (!success)
+                {
+                    AddLog("WRITE", $"0x{addr:X8}", $"0x{newValue:X8}", "TIMEOUT");
+                    return;
+                }
+
+                _currentRegValue = newValue;
+                AddLog("WRITE", $"0x{addr:X8}", $"0x{newValue:X8}", "OK");
+                UpdateBitCurrentValues();
+            }
+            catch (Exception ex)
+            {
+                AddLog("WRITE", $"0x{addr:X8}", $"0x{newValue:X8}", "ERR");
+                MessageBox.Show(ex.Message, "Write Error");
+            }
+        }
+
+        private async void btnWriteAll_Click(object sender, EventArgs e)
+        {
+            if (_chip == null)
+            {
+                MessageBox.Show("ë¨¼ì € Connect í•˜ì„¸ìš”.");
+                return;
+            }
+
+            if (_groups == null || _groups.Count == 0)
+            {
+                MessageBox.Show("ë¨¼ì € Register Treeë¥¼ ë¡œë“œí•˜ì„¸ìš”.");
+                return;
+            }
+
+            foreach (var group in _groups)
+            {
+                foreach (var reg in group.Registers)
+                {
+                    uint addr = reg.Address;
+                    uint data = GetRegisterValue(reg);
+
+                    try
+                    {
+                        bool success = await RunWithTimeout(() =>
+                        {
+                            _chip.WriteRegister(addr, data);
+                        }, I2cTimeoutMs);
+
+                        if (!success)
+                        {
+                            AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "TIMEOUT");
+                            continue;
+                        }
+
+                        _regValues[reg] = data;
+                        AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "OK");
+                    }
+                    catch (Exception ex)
+                    {
+                        AddLog("WRITE_ALL", $"0x{addr:X8}", $"0x{data:X8}", "ERR");
+                        Debug.WriteLine(ex);
+                    }
+                }
+            }
+
+            if (_selectedRegister != null)
+            {
+                _currentRegValue = GetRegisterValue(_selectedRegister);
+                UpdateBitCurrentValues();
+            }
+        }
+
+        private async void btnReadAll_Click(object sender, EventArgs e)
+        {
+            if (_chip == null)
+            {
+                MessageBox.Show("ë¨¼ì € Connect í•˜ì„¸ìš”.");
+                return;
+            }
+
+            if (_groups == null || _groups.Count == 0)
+            {
+                MessageBox.Show("ë¨¼ì € Register Treeë¥¼ ë¡œë“œí•˜ì„¸ìš”.");
+                return;
+            }
+
+            foreach (var group in _groups)
+            {
+                foreach (var reg in group.Registers)
+                {
+                    uint addr = reg.Address;
+
+                    try
+                    {
+                        var result = await RunWithTimeout(() => _chip.ReadRegister(addr), I2cTimeoutMs);
+
+                        if (!result.success)
+                        {
+                            AddLog("READ_ALL", $"0x{addr:X8}", "", "TIMEOUT");
+                            continue;
+                        }
+
+                        uint data = result.result;
+                        _regValues[reg] = data;
+                        AddLog("READ_ALL", $"0x{addr:X8}", $"0x{data:X8}", "OK");
+                    }
+                    catch (Exception ex)
+                    {
+                        AddLog("READ_ALL", $"0x{addr:X8}", "", "ERR");
+                        Debug.WriteLine(ex);
+                    }
+                }
+            }
+
+            if (_selectedRegister != null)
+            {
+                _currentRegValue = GetRegisterValue(_selectedRegister);
+                UpdateBitCurrentValues();
+            }
+        }
+
+        #endregion
 
         #endregion
     }
