@@ -4,6 +4,9 @@ using SKAIChips_Verification_Tool.Core;
 
 namespace SKAIChips_Verification_Tool.Infra
 {
+    /// <summary>
+    /// Provides FT4222-based I²C connectivity that implements the <see cref="IBus"/> contract.
+    /// </summary>
     public sealed class Ft4222I2cBus : IBus, IDisposable
     {
         #region Fields
@@ -20,12 +23,21 @@ namespace SKAIChips_Verification_Tool.Infra
 
         #region Properties
 
+        /// <summary>
+        /// Gets a value indicating whether the FT4222 is connected and not disposed.
+        /// </summary>
         public bool IsConnected => _isConnected && !_disposed;
 
         #endregion
 
         #region Constructors
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Ft4222I2cBus"/> class.
+        /// </summary>
+        /// <param name="deviceIndex">The FTDI device index.</param>
+        /// <param name="slaveAddress">The I²C slave address to target.</param>
+        /// <param name="speedKbps">The I²C bus speed in kilobits per second.</param>
         public Ft4222I2cBus(uint deviceIndex, ushort slaveAddress, ushort speedKbps)
         {
             _deviceIndex = deviceIndex;
@@ -37,6 +49,10 @@ namespace SKAIChips_Verification_Tool.Infra
 
         #region Connection
 
+        /// <summary>
+        /// Opens the FT4222 device and configures it as an I²C master.
+        /// </summary>
+        /// <returns><c>true</c> when the device is connected and initialized; otherwise, <c>false</c>.</returns>
         public bool Connect()
         {
             if (_disposed)
@@ -66,6 +82,9 @@ namespace SKAIChips_Verification_Tool.Infra
             return true;
         }
 
+        /// <summary>
+        /// Closes the FT4222 handle and marks the bus as disconnected.
+        /// </summary>
         public void Disconnect()
         {
             if (_handle != IntPtr.Zero)
@@ -81,6 +100,12 @@ namespace SKAIChips_Verification_Tool.Infra
 
         #region IO
 
+        /// <summary>
+        /// Writes data to the configured I²C slave address.
+        /// </summary>
+        /// <param name="data">The payload to transmit.</param>
+        /// <exception cref="ObjectDisposedException">Thrown when the instance has been disposed.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the bus is not connected or the transfer fails.</exception>
         public void WriteBytes(byte[] data)
         {
             if (_disposed)
@@ -105,6 +130,13 @@ namespace SKAIChips_Verification_Tool.Infra
                 throw new InvalidOperationException($"I2C Write failed: {status}, transferred={transferred}");
         }
 
+        /// <summary>
+        /// Reads data from the configured I²C slave address.
+        /// </summary>
+        /// <param name="length">The number of bytes to read.</param>
+        /// <returns>The bytes returned by the FT4222 device; or an empty array when <paramref name="length"/> is not positive.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown when the instance has been disposed.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the bus is not connected or the transfer fails.</exception>
         public byte[] ReadBytes(int length)
         {
             if (_disposed)
@@ -136,6 +168,9 @@ namespace SKAIChips_Verification_Tool.Infra
 
         #region Dispose
 
+        /// <summary>
+        /// Releases FT4222 resources and disconnects the device if necessary.
+        /// </summary>
         public void Dispose()
         {
             if (_disposed)

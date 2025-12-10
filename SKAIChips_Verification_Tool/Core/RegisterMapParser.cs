@@ -2,10 +2,19 @@
 
 namespace SKAIChips_Verification_Tool.Core
 {
+    /// <summary>
+    /// Parses register map data extracted from spreadsheets into domain models.
+    /// </summary>
     public static class RegisterMapParser
     {
         #region Methods
 
+        /// <summary>
+        /// Creates a <see cref="RegisterGroup"/> from a two-dimensional register map array.
+        /// </summary>
+        /// <param name="groupName">The name assigned to the resulting group.</param>
+        /// <param name="regData">The raw register map data where rows and columns mirror the spreadsheet layout.</param>
+        /// <returns>A populated register group containing registers and bit fields parsed from the input.</returns>
         public static RegisterGroup MakeRegisterGroup(string groupName, string[,] regData)
         {
             var rg = new RegisterGroup(groupName);
