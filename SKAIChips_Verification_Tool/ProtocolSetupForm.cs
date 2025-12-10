@@ -1,7 +1,6 @@
 using System;
 using System.Globalization;
 using System.Windows.Forms;
-using SKAIChips_Verification_Tool.Chips;
 using SKAIChips_Verification_Tool.Core;
 
 namespace SKAIChips_Verification_Tool
@@ -74,7 +73,7 @@ namespace SKAIChips_Verification_Tool
         {
             if (comboProtocol.SelectedItem is not ProtocolType protocol)
             {
-                MessageBox.Show("ProtocolÀ» ¼±ÅÃÇÏ¼¼¿ä.");
+                MessageBox.Show("Protocolì„ ì„ íƒí•˜ì„¸ìš”.");
                 return;
             }
 
@@ -89,7 +88,7 @@ namespace SKAIChips_Verification_Tool
 
                 if (!TryParseHexByte(txtSlaveAddr.Text, out var slave))
                 {
-                    MessageBox.Show("I2C Slave Address Çü½ÄÀÌ Àß¸øµÇ¾ú½À´Ï´Ù. ¿¹: 0x52");
+                    MessageBox.Show("I2C Slave Address í˜•ì‹ì´ ì˜ëª»ë˜ì—ˆìŠµë‹ˆë‹¤. ì˜ˆ: 0x52");
                     return;
                 }
 

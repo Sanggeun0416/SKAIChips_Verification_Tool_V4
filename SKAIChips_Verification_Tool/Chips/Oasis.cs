@@ -1,33 +1,71 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using SKAIChips_Verification_Tool.Core;
 
 namespace SKAIChips_Verification_Tool.Chips
 {
-    public sealed class Oasis : IRegisterChip
+    public class OasisProject : IChipProject, IChipProjectWithTests
     {
-        #region Fields
+        public string Name => "Oasis";
 
+        public IEnumerable<ProtocolType> SupportedProtocols { get; } = new[] { ProtocolType.I2C };
+
+        public IRegisterChip CreateChip(IBus bus, ProtocolSettings settings)
+        {
+            if (settings == null)
+                throw new ArgumentNullException(nameof(settings));
+
+            if (bus == null)
+                throw new ArgumentNullException(nameof(bus));
+
+            if (settings.ProtocolType != ProtocolType.I2C)
+                throw new InvalidOperationException("Oasis supports only I2C.");
+
+            return new OasisRegisterChip("Oasis", bus);
+        }
+
+        public IChipTestSuite CreateTestSuite(IRegisterChip chip)
+        {
+            if (chip is not OasisRegisterChip oasisChip)
+                throw new ArgumentException("Chip instance must be OasisRegisterChip.", nameof(chip));
+
+            return new OasisTestSuite(oasisChip);
+        }
+    }
+
+    internal class OasisRegisterChip : IRegisterChip
+    {
         private readonly IBus _bus;
-
-        #endregion
-
-        #region Properties
 
         public string Name { get; }
 
-        #endregion
-
-        #region Constructors
-
-        public Oasis(string name, IBus bus)
+        public OasisRegisterChip(string name, IBus bus)
         {
             Name = name ?? throw new ArgumentNullException(nameof(name));
             _bus = bus ?? throw new ArgumentNullException(nameof(bus));
         }
 
-        #endregion
+        public uint ReadRegister(uint address)
+        {
+            var cmd = BuildAddressCommand(address);
+            _bus.WriteBytes(cmd);
 
-        #region Private Methods
+            var rcv = _bus.ReadBytes(4);
+            var data = (uint)((rcv[3] << 24) | (rcv[2] << 16) | (rcv[1] << 8) | rcv[0]);
+
+            return data;
+        }
+
+        public void WriteRegister(uint address, uint data)
+        {
+            var cmd = BuildAddressCommand(address);
+            _bus.WriteBytes(cmd);
+
+            var dataBytes = ToLittleEndianBytes(data);
+            _bus.WriteBytes(dataBytes);
+        }
 
         private static byte[] BuildAddressCommand(uint address)
         {
@@ -56,60 +94,44 @@ namespace SKAIChips_Verification_Tool.Chips
 
             return data;
         }
-
-        #endregion
-
-        #region Public Methods
-
-        public uint ReadRegister(uint address)
-        {
-            var cmd = BuildAddressCommand(address);
-            _bus.WriteBytes(cmd);
-
-            var rcv = _bus.ReadBytes(4);
-            var data = (uint)((rcv[3] << 24) | (rcv[2] << 16) | (rcv[1] << 8) | rcv[0]);
-
-            return data;
-        }
-
-        public void WriteRegister(uint address, uint data)
-        {
-            var cmd = BuildAddressCommand(address);
-            _bus.WriteBytes(cmd);
-
-            var dataBytes = ToLittleEndianBytes(data);
-            _bus.WriteBytes(dataBytes);
-        }
-
-        #endregion
     }
 
-    public sealed class OasisProject : IChipProject
+    internal class OasisTestSuite : IChipTestSuite
     {
-        #region Properties
+        private readonly OasisRegisterChip _chip;
 
-        public string Name => "Oasis";
+        public IReadOnlyList<ChipTestInfo> Tests { get; }
 
-        public ProtocolType[] SupportedProtocols { get; } = { ProtocolType.I2C };
-
-        #endregion
-
-        #region Methods
-
-        public IRegisterChip CreateChip(IBus bus, ProtocolSettings settings)
+        public OasisTestSuite(OasisRegisterChip chip)
         {
-            if (settings == null)
-                throw new ArgumentNullException(nameof(settings));
+            _chip = chip;
 
-            if (bus == null)
-                throw new ArgumentNullException(nameof(bus));
-
-            if (settings.ProtocolType != ProtocolType.I2C)
-                throw new InvalidOperationException("Oasis supports only I2C.");
-
-            return new Oasis("Oasis", bus);
+            Tests = new[]
+            {
+                new ChipTestInfo("dummy", "Dummy Test", "Oasis 테스트 시퀀스 자리")
+            };
         }
 
-        #endregion
+        public async Task RunTestAsync(
+            string testId,
+            Func<string, string, Task> log,
+            CancellationToken cancellationToken)
+        {
+            await log("INFO", $"Oasis Test '{testId}' 시작");
+
+            switch (testId)
+            {
+                case "dummy":
+                    await log("INFO", "아직 구현 안 됨");
+                    await Task.Delay(500, cancellationToken);
+                    break;
+
+                default:
+                    await log("ERROR", $"Unknown testId: {testId}");
+                    break;
+            }
+
+            await log("INFO", $"Oasis Test '{testId}' 종료");
+        }
     }
 }
