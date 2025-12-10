@@ -102,6 +102,12 @@ namespace SKAIChips_Verification_Tool.Chips
         private readonly OasisRegisterChip _chip;
         private string _firmwareFilePath = string.Empty;
 
+        private enum FLASH_CMD : byte
+        {
+            PP = 0x02,
+            BE64 = 0xD8,
+        }
+
         private enum TEST_ITEMS
         {
             GPIO_DISABLE,
@@ -286,6 +292,9 @@ namespace SKAIChips_Verification_Tool.Chips
 
             switch (item)
             {
+                case FW_DN_ITEMS.FLASH_ERASE:
+                    await RunFlashEraseAsync(log, ct);
+                    break;
                 case FW_DN_ITEMS.FLASH_WRITE:
                     await RunFlashWriteAsync(log, ct);
                     break;
@@ -293,6 +302,36 @@ namespace SKAIChips_Verification_Tool.Chips
                     await log("INFO", $"FW item '{item}' is not implemented yet.");
                     break;
             }
+        }
+
+        private async Task RunFlashEraseAsync(Func<string, string, Task> log, CancellationToken ct)
+        {
+            if (!await CheckI2cIdAsync(log, ct))
+                return;
+
+            await log("INFO", "Start FLASH_ERASE (8 sectors of 64KB).");
+
+            for (uint num = 0; num < 8; num++)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                uint secAddr = num * 0x10000u;
+                await log("INFO", $"Erase sector #{num} @ 0x{secAddr:X8}");
+
+                uint cmd = ((uint)FLASH_CMD.BE64 << 24) | (secAddr & 0x00FFFFFFu);
+                _chip.WriteRegister(0x5009_0008, cmd);
+
+                bool ok = await WaitFlashReadyAsync(log, ct);
+                if (!ok)
+                {
+                    await log("ERROR", $"Sector erase timeout @ 0x{secAddr:X8}");
+                    return;
+                }
+
+                await log("INFO", $"Sector #{num} erase OK.");
+            }
+
+            await log("INFO", "FLASH_ERASE completed successfully.");
         }
 
         private async Task SetGpioDisableAsync(Func<string, string, Task> log, CancellationToken ct)
@@ -594,7 +633,27 @@ namespace SKAIChips_Verification_Tool.Chips
                 return false;
             }
 
+            await log("INFO", $"I2C IP ID OK: 0x{idPrefix:X5}");
             return true;
+        }
+
+        private async Task<bool> WaitFlashReadyAsync(Func<string, string, Task> log, CancellationToken ct, int maxLoopCount = 20, int delayMs = 200)
+        {
+            for (int cnt = 0; cnt < maxLoopCount; cnt++)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                uint status = _chip.ReadRegister(0x5009_0020);
+                uint busy = status & 0x01u;
+
+                if (busy == 0)
+                    return true;
+
+                await Task.Delay(delayMs, ct);
+            }
+
+            await log("ERROR", "Flash controller did not become ready within timeout.");
+            return false;
         }
 
         private async Task<bool> WriteMemoryNvmAsync(uint flashAddress, byte[] pageBuffer, Func<string, string, Task> log, CancellationToken ct)
@@ -602,7 +661,7 @@ namespace SKAIChips_Verification_Tool.Chips
             const uint FlashTxBase = 0x5009_1000;
             const uint FlashCmdReg = 0x5009_0008;
             const uint FlashStatusReg = 0x5009_000C;
-            const byte FlashCmdPageProgram = 0x02;
+            const byte FlashCmdPageProgram = (byte)FLASH_CMD.PP;
 
             for (int i = 0; i < pageBuffer.Length; i += 4)
             {

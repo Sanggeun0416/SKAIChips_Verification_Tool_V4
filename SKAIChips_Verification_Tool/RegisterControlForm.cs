@@ -1117,13 +1117,11 @@ namespace SKAIChips_Verification_Tool
                         Tag = reg
                     };
 
+                    uint regVal = GetRegisterValue(reg);
+
                     foreach (var item in reg.Items)
                     {
-                        string bitText = item.UpperBit == item.LowerBit
-                            ? item.UpperBit.ToString()
-                            : $"{item.UpperBit}:{item.LowerBit}";
-
-                        var itemNode = new TreeNode($"[{bitText}] {item.Name}")
+                        var itemNode = new TreeNode(FormatItemNodeText(item, regVal))
                         {
                             Tag = item
                         };
@@ -1148,6 +1146,19 @@ namespace SKAIChips_Verification_Tool
             }
 
             tvRegs.EndUpdate();
+        }
+
+        private static string FormatItemNodeText(RegisterItem item, uint regValue)
+        {
+            string bitText = item.UpperBit == item.LowerBit
+                ? item.UpperBit.ToString()
+                : $"{item.UpperBit}:{item.LowerBit}";
+
+            int width = item.UpperBit - item.LowerBit + 1;
+            uint mask = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
+            uint fieldVal = (regValue >> item.LowerBit) & mask;
+
+            return $"[{bitText}] {item.Name} = {fieldVal} (0x{fieldVal:X})";
         }
 
         private uint GetRegisterValue(Register reg)
@@ -1356,18 +1367,47 @@ namespace SKAIChips_Verification_Tool
 
                 if (node.Tag is RegisterItem item && node.Parent?.Tag is Register parentReg && ReferenceEquals(parentReg, reg))
                 {
-                    int width = item.UpperBit - item.LowerBit + 1;
-                    uint mask = width >= 32 ? 0xFFFFFFFFu : ((1u << width) - 1u);
-                    uint fieldVal = (regValue >> item.LowerBit) & mask;
-                    string bitText = item.UpperBit == item.LowerBit
-                        ? item.UpperBit.ToString()
-                        : $"{item.UpperBit}:{item.LowerBit}";
-
-                    node.Text = $"[{bitText}] {item.Name} = {fieldVal} (0x{fieldVal:X})";
+                    node.Text = FormatItemNodeText(item, regValue);
                 }
 
                 foreach (TreeNode child in node.Nodes)
                     stack.Push(child);
+            }
+        }
+
+        private void RefreshRegisterTreeValues()
+        {
+            if (tvRegs.Nodes.Count == 0)
+                return;
+
+            tvRegs.BeginUpdate();
+            try
+            {
+                foreach (TreeNode groupNode in tvRegs.Nodes)
+                {
+                    if (groupNode.Tag is not RegisterGroup g)
+                        continue;
+
+                    foreach (TreeNode regNode in groupNode.Nodes)
+                    {
+                        if (regNode.Tag is not Register reg)
+                            continue;
+
+                        uint regVal = GetRegisterValue(reg);
+
+                        foreach (TreeNode itemNode in regNode.Nodes)
+                        {
+                            if (itemNode.Tag is not RegisterItem item)
+                                continue;
+
+                            itemNode.Text = FormatItemNodeText(item, regVal);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                tvRegs.EndUpdate();
             }
         }
 
@@ -1504,6 +1544,8 @@ namespace SKAIChips_Verification_Tool
                 _currentRegValue = GetRegisterValue(_selectedRegister);
                 UpdateBitCurrentValues();
             }
+
+            RefreshRegisterTreeValues();
         }
 
         private void btnSaveScript_Click(object sender, EventArgs e)
@@ -1765,6 +1807,8 @@ namespace SKAIChips_Verification_Tool
                 _currentRegValue = GetRegisterValue(_selectedRegister);
                 UpdateBitCurrentValues();
             }
+
+            RefreshRegisterTreeValues();
         }
 
         private async void btnReadAll_Click(object sender, EventArgs e)
@@ -1814,6 +1858,8 @@ namespace SKAIChips_Verification_Tool
                 _currentRegValue = GetRegisterValue(_selectedRegister);
                 UpdateBitCurrentValues();
             }
+
+            RefreshRegisterTreeValues();
         }
 
         #endregion
