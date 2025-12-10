@@ -35,6 +35,7 @@ namespace SKAIChips_Verification_Tool
         private GroupBox groupLog;
         private GroupBox groupRegDesc;
         private GroupBox groupRegTree;
+        private GroupBox grpRunTest;
         private Label lblMapFileName;
         private Button btnOpenMapPath;
         private NumericUpDown numRegIndex;
@@ -66,6 +67,13 @@ namespace SKAIChips_Verification_Tool
         private DataGridViewTextBoxColumn colAutoState;
         private DataGridViewTextBoxColumn colAutoStep;
         private DataGridViewTextBoxColumn colAutoMessage;
+        private ComboBox comboTests;
+        private Button btnRunTest;
+        private Button btnStopTest;
+        private DataGridView dgvTestLog;
+        private DataGridViewTextBoxColumn colTestTime;
+        private DataGridViewTextBoxColumn colTestLevel;
+        private DataGridViewTextBoxColumn colTestMessage;
 
         protected override void Dispose(bool disposing)
         {
@@ -122,6 +130,14 @@ namespace SKAIChips_Verification_Tool
             groupLog = new GroupBox();
             groupRegDesc = new GroupBox();
             groupRegTree = new GroupBox();
+            grpRunTest = new GroupBox();
+            comboTests = new ComboBox();
+            btnRunTest = new Button();
+            btnStopTest = new Button();
+            dgvTestLog = new DataGridView();
+            colTestTime = new DataGridViewTextBoxColumn();
+            colTestLevel = new DataGridViewTextBoxColumn();
+            colTestMessage = new DataGridViewTextBoxColumn();
 
             // AutoTask
             groupAutoTask = new GroupBox();
@@ -136,12 +152,14 @@ namespace SKAIChips_Verification_Tool
             colAutoState = new DataGridViewTextBoxColumn();
             colAutoStep = new DataGridViewTextBoxColumn();
             colAutoMessage = new DataGridViewTextBoxColumn();
+            ((System.ComponentModel.ISupportInitialize)dgvTestLog).BeginInit();
 
             ((System.ComponentModel.ISupportInitialize)dgvLog).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvBits).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numRegIndex).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvAutoTaskLog).BeginInit();
             groupSetup.SuspendLayout();
+            grpRunTest.SuspendLayout();
             groupRegMap.SuspendLayout();
             groupRegCont.SuspendLayout();
             groupLog.SuspendLayout();
@@ -378,6 +396,70 @@ namespace SKAIChips_Verification_Tool
             labelConnection.TabIndex = 8;
             labelConnection.Text = "Status";
 
+            // grpRunTest
+            grpRunTest.Controls.Add(dgvTestLog);
+            grpRunTest.Controls.Add(btnStopTest);
+            grpRunTest.Controls.Add(btnRunTest);
+            grpRunTest.Controls.Add(comboTests);
+            grpRunTest.Location = new Point(458, 4);
+            grpRunTest.Name = "grpRunTest";
+            grpRunTest.Size = new Size(334, 125);
+            grpRunTest.TabIndex = 36;
+            grpRunTest.TabStop = false;
+            grpRunTest.Text = "Run Test";
+
+            comboTests.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboTests.FormattingEnabled = true;
+            comboTests.Location = new Point(6, 22);
+            comboTests.Name = "comboTests";
+            comboTests.Size = new Size(200, 23);
+            comboTests.TabIndex = 0;
+
+            btnRunTest.Location = new Point(212, 22);
+            btnRunTest.Name = "btnRunTest";
+            btnRunTest.Size = new Size(55, 23);
+            btnRunTest.TabIndex = 1;
+            btnRunTest.Text = "Run";
+            btnRunTest.UseVisualStyleBackColor = true;
+
+            btnStopTest.Location = new Point(273, 22);
+            btnStopTest.Name = "btnStopTest";
+            btnStopTest.Size = new Size(55, 23);
+            btnStopTest.TabIndex = 2;
+            btnStopTest.Text = "Stop";
+            btnStopTest.UseVisualStyleBackColor = true;
+
+            dgvTestLog.AllowUserToAddRows = false;
+            dgvTestLog.AllowUserToDeleteRows = false;
+            dgvTestLog.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvTestLog.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvTestLog.Columns.AddRange(new DataGridViewColumn[]
+            {
+                colTestTime, colTestLevel, colTestMessage
+            });
+            dgvTestLog.Location = new Point(6, 51);
+            dgvTestLog.Name = "dgvTestLog";
+            dgvTestLog.ReadOnly = true;
+            dgvTestLog.RowHeadersVisible = false;
+            dgvTestLog.Size = new Size(322, 68);
+            dgvTestLog.TabIndex = 3;
+
+            colTestTime.HeaderText = "Time";
+            colTestTime.Name = "colTestTime";
+            colTestTime.ReadOnly = true;
+            colTestTime.FillWeight = 20F;
+
+            colTestLevel.HeaderText = "Level";
+            colTestLevel.Name = "colTestLevel";
+            colTestLevel.ReadOnly = true;
+            colTestLevel.FillWeight = 20F;
+
+            colTestMessage.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            colTestMessage.HeaderText = "Message";
+            colTestMessage.Name = "colTestMessage";
+            colTestMessage.ReadOnly = true;
+            colTestMessage.FillWeight = 60F;
+
             // groupRegMap
             groupRegMap.Controls.Add(clbSheets);
             groupRegMap.Controls.Add(btnSelectMapFile);
@@ -387,7 +469,7 @@ namespace SKAIChips_Verification_Tool
             groupRegMap.Location = new Point(458, 135);
             groupRegMap.Name = "groupRegMap";
             groupRegMap.Size = new Size(334, 171);
-            groupRegMap.TabIndex = 36;
+            groupRegMap.TabIndex = 37;
             groupRegMap.TabStop = false;
             groupRegMap.Text = "Register Map";
 
@@ -420,7 +502,7 @@ namespace SKAIChips_Verification_Tool
             groupRegCont.Location = new Point(458, 312);
             groupRegCont.Name = "groupRegCont";
             groupRegCont.Size = new Size(334, 194);
-            groupRegCont.TabIndex = 37;
+            groupRegCont.TabIndex = 38;
             groupRegCont.TabStop = false;
             groupRegCont.Text = "Register Control";
 
@@ -496,7 +578,7 @@ namespace SKAIChips_Verification_Tool
             groupLog.Location = new Point(798, 4);
             groupLog.Name = "groupLog";
             groupLog.Size = new Size(585, 276);
-            groupLog.TabIndex = 38;
+            groupLog.TabIndex = 39;
             groupLog.TabStop = false;
             groupLog.Text = "Register Control Log";
 
@@ -506,7 +588,7 @@ namespace SKAIChips_Verification_Tool
             groupRegDesc.Location = new Point(5, 506);
             groupRegDesc.Name = "groupRegDesc";
             groupRegDesc.Size = new Size(1378, 333);
-            groupRegDesc.TabIndex = 39;
+            groupRegDesc.TabIndex = 40;
             groupRegDesc.TabStop = false;
             groupRegDesc.Text = "Register Description";
 
@@ -519,7 +601,7 @@ namespace SKAIChips_Verification_Tool
             groupRegTree.Location = new Point(5, 4);
             groupRegTree.Name = "groupRegTree";
             groupRegTree.Size = new Size(447, 496);
-            groupRegTree.TabIndex = 40;
+            groupRegTree.TabIndex = 41;
             groupRegTree.TabStop = false;
             groupRegTree.Text = "Register Tree";
 
@@ -535,7 +617,7 @@ namespace SKAIChips_Verification_Tool
             groupAutoTask.Location = new Point(798, 286);
             groupAutoTask.Name = "groupAutoTask";
             groupAutoTask.Size = new Size(585, 220);
-            groupAutoTask.TabIndex = 41;
+            groupAutoTask.TabIndex = 42;
             groupAutoTask.TabStop = false;
             groupAutoTask.Text = "AutoTask";
 
@@ -621,6 +703,7 @@ namespace SKAIChips_Verification_Tool
             Controls.Add(groupRegDesc);
             Controls.Add(groupLog);
             Controls.Add(groupRegCont);
+            Controls.Add(grpRunTest);
             Controls.Add(groupRegMap);
             Controls.Add(groupSetup);
             MinimumSize = new Size(1400, 880);
@@ -631,8 +714,11 @@ namespace SKAIChips_Verification_Tool
             ((System.ComponentModel.ISupportInitialize)dgvBits).EndInit();
             ((System.ComponentModel.ISupportInitialize)numRegIndex).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvAutoTaskLog).EndInit();
+            ((System.ComponentModel.ISupportInitialize)dgvTestLog).EndInit();
             groupSetup.ResumeLayout(false);
             groupSetup.PerformLayout();
+            grpRunTest.ResumeLayout(false);
+            grpRunTest.PerformLayout();
             groupRegMap.ResumeLayout(false);
             groupRegCont.ResumeLayout(false);
             groupRegCont.PerformLayout();

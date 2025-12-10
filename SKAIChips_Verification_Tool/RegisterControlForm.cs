@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -34,6 +35,10 @@ namespace SKAIChips_Verification_Tool
         private uint _currentRegValue;
         private bool _isUpdatingRegValue;
         private string _scriptFilePath;
+
+        private IChipTestSuite _testSuite;
+        private CancellationTokenSource _testCts;
+        private bool _isRunningTest;
 
         private const int I2cTimeoutMs = 200;
 
@@ -67,8 +72,40 @@ namespace SKAIChips_Verification_Tool
             InitRegisterValueControls();
             InitScriptControls();
             InitStatusControls();
+            InitRunTestUi();
 
             LoadProjects();
+        }
+
+        private void InitRunTestUi()
+        {
+            if (dgvTestLog == null)
+                return;
+
+            dgvTestLog.AutoGenerateColumns = false;
+            dgvTestLog.Columns.Clear();
+
+            var colTime = new DataGridViewTextBoxColumn { Name = "colTime", HeaderText = "Time", ReadOnly = true };
+            var colLevel = new DataGridViewTextBoxColumn { Name = "colLevel", HeaderText = "Level", ReadOnly = true };
+            var colMessage = new DataGridViewTextBoxColumn
+            {
+                Name = "colMessage",
+                HeaderText = "Message",
+                ReadOnly = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+            };
+
+            dgvTestLog.Columns.Add(colTime);
+            dgvTestLog.Columns.Add(colLevel);
+            dgvTestLog.Columns.Add(colMessage);
+
+            comboTests.Items.Clear();
+            btnRunTest.Enabled = false;
+            btnStopTest.Enabled = false;
+            dgvTestLog.Rows.Clear();
+
+            btnRunTest.Click += btnRunTest_Click;
+            btnStopTest.Click += btnStopTest_Click;
         }
 
         private void InitLogGrid()
@@ -425,6 +462,97 @@ namespace SKAIChips_Verification_Tool
             dgvLog.FirstDisplayedScrollingRowIndex = rowIndex;
         }
 
+        private async void btnRunTest_Click(object sender, EventArgs e)
+        {
+            if (_testSuite == null)
+            {
+                MessageBox.Show("현재 프로젝트는 Run Test를 지원하지 않습니다.");
+                return;
+            }
+
+            if (_isRunningTest)
+            {
+                MessageBox.Show("이미 테스트가 실행 중입니다.");
+                return;
+            }
+
+            if (comboTests.SelectedItem is not ChipTestInfo info)
+            {
+                MessageBox.Show("실행할 테스트를 선택하세요.");
+                return;
+            }
+
+            _testCts = new CancellationTokenSource();
+            _isRunningTest = true;
+
+            btnRunTest.Enabled = false;
+            btnStopTest.Enabled = true;
+            dgvTestLog.Rows.Clear();
+
+            try
+            {
+                await _testSuite.RunTestAsync(
+                    info.Id,
+                    async (level, message) =>
+                    {
+                        if (IsDisposed) return;
+
+                        if (InvokeRequired)
+                        {
+                            BeginInvoke(new Action(() =>
+                            {
+                                AddTestLogRow(level, message);
+                            }));
+                        }
+                        else
+                        {
+                            AddTestLogRow(level, message);
+                        }
+
+                        await Task.CompletedTask;
+                    },
+                    _testCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                AddTestLogRow("INFO", "테스트가 취소되었습니다.");
+            }
+            catch (Exception ex)
+            {
+                AddTestLogRow("ERROR", ex.Message);
+            }
+            finally
+            {
+                _isRunningTest = false;
+                _testCts?.Dispose();
+                _testCts = null;
+
+                btnRunTest.Enabled = _testSuite != null && comboTests.Items.Count > 0;
+                btnStopTest.Enabled = false;
+            }
+        }
+
+        private void btnStopTest_Click(object sender, EventArgs e)
+        {
+            if (!_isRunningTest)
+                return;
+
+            _testCts?.Cancel();
+            btnStopTest.Enabled = false;
+        }
+
+        private void AddTestLogRow(string level, string message)
+        {
+            int rowIndex = dgvTestLog.Rows.Add();
+            var row = dgvTestLog.Rows[rowIndex];
+
+            row.Cells["colTime"].Value = DateTime.Now.ToString("HH:mm:ss");
+            row.Cells["colLevel"].Value = level;
+            row.Cells["colMessage"].Value = message;
+
+            dgvTestLog.FirstDisplayedScrollingRowIndex = rowIndex;
+        }
+
         #endregion
 
         #region Project / connection
@@ -468,6 +596,15 @@ namespace SKAIChips_Verification_Tool
 
             _bus = null;
             _chip = null;
+            _testCts?.Cancel();
+            _testCts = null;
+            _testSuite = null;
+            _isRunningTest = false;
+
+            comboTests.Items.Clear();
+            btnRunTest.Enabled = false;
+            btnStopTest.Enabled = false;
+            dgvTestLog.Rows.Clear();
 
             btnConnect.Text = "Connect";
             UpdateStatusText();
@@ -533,6 +670,30 @@ namespace SKAIChips_Verification_Tool
                 }
 
                 _chip = _selectedProject.CreateChip(_bus, _protocolSettings);
+
+                _testSuite = null;
+                _testCts?.Cancel();
+                _testCts = null;
+                _isRunningTest = false;
+
+                comboTests.Items.Clear();
+                btnRunTest.Enabled = false;
+                btnStopTest.Enabled = false;
+                dgvTestLog.Rows.Clear();
+
+                if (_selectedProject is IChipProjectWithTests projWithTests)
+                {
+                    _testSuite = projWithTests.CreateTestSuite(_chip);
+                    if (_testSuite != null && _testSuite.Tests != null && _testSuite.Tests.Count > 0)
+                    {
+                        foreach (var t in _testSuite.Tests)
+                            comboTests.Items.Add(t);
+
+                        comboTests.DisplayMember = "Name";
+                        comboTests.SelectedIndex = 0;
+                        btnRunTest.Enabled = true;
+                    }
+                }
 
                 btnConnect.Text = "Disconnect";
                 UpdateStatusText();
