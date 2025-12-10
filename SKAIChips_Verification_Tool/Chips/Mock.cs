@@ -30,6 +30,8 @@ namespace SKAIChips_Verification_Tool.Chips
     {
         private readonly Dictionary<uint, uint> _registers = new();
 
+        public string Name => "Mock Chip";
+
         public uint ReadRegister(uint address)
         {
             return _registers.TryGetValue(address, out var value) ? value : 0;
