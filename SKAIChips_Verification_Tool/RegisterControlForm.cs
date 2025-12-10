@@ -8,6 +8,8 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -42,6 +44,10 @@ namespace SKAIChips_Verification_Tool
 
         private readonly Dictionary<Register, uint> _regValues = new();
 
+        private IChipTestSuite _testSuite;
+        private CancellationTokenSource _testCts;
+        private bool _isRunningTest;
+
         #endregion
 
         #region Constructor / Form lifecycle
@@ -67,6 +73,7 @@ namespace SKAIChips_Verification_Tool
             InitRegisterValueControls();
             InitScriptControls();
             InitStatusControls();
+            InitRunTestUi();
 
             LoadProjects();
         }
@@ -239,6 +246,36 @@ namespace SKAIChips_Verification_Tool
         {
             btnConnect.Text = "Connect";
             UpdateStatusText();
+        }
+
+        private void InitRunTestUi()
+        {
+            dgvTestLog.AutoGenerateColumns = false;
+            dgvTestLog.Columns.Clear();
+
+            var colTime = new DataGridViewTextBoxColumn { Name = "colTime", HeaderText = "Time", ReadOnly = true };
+            var colLevel = new DataGridViewTextBoxColumn { Name = "colLevel", HeaderText = "Level", ReadOnly = true };
+            var colMessage = new DataGridViewTextBoxColumn
+            {
+                Name = "colMessage",
+                HeaderText = "Message",
+                ReadOnly = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+            };
+
+            dgvTestLog.Columns.Add(colTime);
+            dgvTestLog.Columns.Add(colLevel);
+            dgvTestLog.Columns.Add(colMessage);
+
+            comboTestCategory.Items.Clear();
+            comboTests.Items.Clear();
+            btnRunTest.Enabled = false;
+            btnStopTest.Enabled = false;
+            dgvTestLog.Rows.Clear();
+
+            comboTestCategory.SelectedIndexChanged += comboTestCategory_SelectedIndexChanged;
+            btnRunTest.Click += btnRunTest_Click;
+            btnStopTest.Click += btnStopTest_Click;
         }
 
         #endregion
@@ -425,6 +462,123 @@ namespace SKAIChips_Verification_Tool
             dgvLog.FirstDisplayedScrollingRowIndex = rowIndex;
         }
 
+        private void comboTestCategory_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            comboTests.Items.Clear();
+
+            if (_testSuite == null)
+                return;
+
+            if (comboTestCategory.SelectedItem is not string category)
+                return;
+
+            var testsInCategory = _testSuite.Tests
+                .Where(t => string.Equals(t.Category, category, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var t in testsInCategory)
+                comboTests.Items.Add(t);
+
+            comboTests.DisplayMember = "Name";
+
+            if (comboTests.Items.Count > 0)
+                comboTests.SelectedIndex = 0;
+
+            btnRunTest.Enabled = comboTests.Items.Count > 0;
+            btnStopTest.Enabled = false;
+        }
+
+        private async void btnRunTest_Click(object sender, EventArgs e)
+        {
+            if (_testSuite == null)
+            {
+                MessageBox.Show("현재 프로젝트는 Run Test를 지원하지 않습니다.");
+                return;
+            }
+
+            if (_isRunningTest)
+            {
+                MessageBox.Show("이미 테스트가 실행 중입니다.");
+                return;
+            }
+
+            if (comboTests.SelectedItem is not ChipTestInfo info)
+            {
+                MessageBox.Show("실행할 테스트를 선택하세요.");
+                return;
+            }
+
+            _testCts = new CancellationTokenSource();
+            _isRunningTest = true;
+
+            btnRunTest.Enabled = false;
+            btnStopTest.Enabled = true;
+            dgvTestLog.Rows.Clear();
+
+            try
+            {
+                await _testSuite.RunTestAsync(
+                    info.Id,
+                    async (level, message) =>
+                    {
+                        if (IsDisposed) return;
+
+                        if (InvokeRequired)
+                        {
+                            BeginInvoke(new Action(() =>
+                            {
+                                AddTestLogRow(level, message);
+                            }));
+                        }
+                        else
+                        {
+                            AddTestLogRow(level, message);
+                        }
+
+                        await Task.CompletedTask;
+                    },
+                    _testCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                AddTestLogRow("INFO", "테스트가 취소되었습니다.");
+            }
+            catch (Exception ex)
+            {
+                AddTestLogRow("ERROR", ex.Message);
+            }
+            finally
+            {
+                _isRunningTest = false;
+                _testCts?.Dispose();
+                _testCts = null;
+
+                btnRunTest.Enabled = _testSuite != null && comboTests.Items.Count > 0;
+                btnStopTest.Enabled = false;
+            }
+        }
+
+        private void btnStopTest_Click(object sender, EventArgs e)
+        {
+            if (!_isRunningTest)
+                return;
+
+            _testCts?.Cancel();
+            btnStopTest.Enabled = false;
+        }
+
+        private void AddTestLogRow(string level, string message)
+        {
+            int rowIndex = dgvTestLog.Rows.Add();
+            var row = dgvTestLog.Rows[rowIndex];
+
+            row.Cells["colTime"].Value = DateTime.Now.ToString("HH:mm:ss");
+            row.Cells["colLevel"].Value = level;
+            row.Cells["colMessage"].Value = message;
+
+            dgvTestLog.FirstDisplayedScrollingRowIndex = rowIndex;
+        }
+
         #endregion
 
         #region Project / connection
@@ -468,6 +622,17 @@ namespace SKAIChips_Verification_Tool
 
             _bus = null;
             _chip = null;
+
+            _testCts?.Cancel();
+            _testCts = null;
+            _testSuite = null;
+            _isRunningTest = false;
+
+            comboTestCategory.Items.Clear();
+            comboTests.Items.Clear();
+            btnRunTest.Enabled = false;
+            btnStopTest.Enabled = false;
+            dgvTestLog.Rows.Clear();
 
             btnConnect.Text = "Connect";
             UpdateStatusText();
@@ -533,6 +698,36 @@ namespace SKAIChips_Verification_Tool
                 }
 
                 _chip = _selectedProject.CreateChip(_bus, _protocolSettings);
+
+                _testSuite = null;
+                _testCts?.Cancel();
+                _testCts = null;
+                _isRunningTest = false;
+
+                comboTestCategory.Items.Clear();
+                comboTests.Items.Clear();
+                btnRunTest.Enabled = false;
+                btnStopTest.Enabled = false;
+                dgvTestLog.Rows.Clear();
+
+                if (_selectedProject is IChipProjectWithTests projWithTests)
+                {
+                    _testSuite = projWithTests.CreateTestSuite(_chip);
+                    if (_testSuite != null && _testSuite.Tests != null && _testSuite.Tests.Count > 0)
+                    {
+                        var categories = _testSuite.Tests
+                            .Select(t => t.Category)
+                            .Distinct()
+                            .OrderBy(x => x)
+                            .ToList();
+
+                        foreach (var c in categories)
+                            comboTestCategory.Items.Add(c);
+
+                        if (comboTestCategory.Items.Count > 0)
+                            comboTestCategory.SelectedIndex = 0;
+                    }
+                }
 
                 btnConnect.Text = "Disconnect";
                 UpdateStatusText();
