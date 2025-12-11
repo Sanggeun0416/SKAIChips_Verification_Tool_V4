@@ -68,6 +68,20 @@ namespace SKAIChips_Verification_Tool.Chips
             _bus.WriteBytes(dataBytes);
         }
 
+        internal void HaltMcu()
+        {
+            var cmd = new byte[] { 0xA1, 0x2C, 0x56, 0x78 };
+            _bus.WriteBytes(cmd);
+            Thread.Sleep(50); // wait for system reset
+        }
+
+        internal void ResetMcu()
+        {
+            var cmd = new byte[] { 0xA1, 0x2C, 0xAB, 0xCD };
+            _bus.WriteBytes(cmd);
+            Thread.Sleep(50); // wait for system reset
+        }
+
         private static byte[] BuildAddressCommand(uint address)
         {
             var cmd = new byte[8];
@@ -101,12 +115,7 @@ namespace SKAIChips_Verification_Tool.Chips
     {
         private readonly OasisRegisterChip _chip;
         private string _firmwareFilePath = string.Empty;
-
-        private enum FLASH_CMD : byte
-        {
-            PP = 0x02,
-            BE64 = 0xD8,
-        }
+        private int _flashDumpSize = 0; // 0이면 fw 파일 크기 기준으로 덤프
 
         private enum TEST_ITEMS
         {
@@ -143,6 +152,36 @@ namespace SKAIChips_Verification_Tool.Chips
             NUM_TEST_ITEMS,
         }
 
+        private enum FLASH_CMD : byte
+        {
+            WRSR = 0x01,    // write status reg
+            PP = 0x02,      // page program
+            RDCMD = 0x03,   // read data
+            WRDI = 0x04,    // write disable
+            RDSR = 0x05,    // read status reg
+            WREN = 0x06,    // write enable
+            F_RD = 0x0B,    // fast read
+            SE = 0x20,      // 4KB sector erase
+            BE32 = 0x52,    // 32KB block erase
+            RSTEN = 0x66,   // reset enable
+            REMS = 0x90,    // read manufacture
+            RST = 0x99,     // reset
+            RDID = 0x9F,    // read identification
+            RES = 0xAB,     // read signature
+            ENSO = 0xB1,    // enter secured OTP
+            DP = 0xB9,      // deep power down
+            EXSO = 0xC1,    // exit secured OTP
+            CE = 0xC7,      // chip(bulk) erase
+            BE64 = 0xD8,    // 64KB sector erase
+        }
+
+        private enum FW_TARGET
+        {
+            NV_MEM = 0,
+            RAM = 1,
+            SPI,
+        }
+
         public IReadOnlyList<ChipTestInfo> Tests { get; }
 
         public OasisTestSuite(OasisRegisterChip chip)
@@ -173,6 +212,8 @@ namespace SKAIChips_Verification_Tool.Chips
         {
             _firmwareFilePath = path;
         }
+
+        public void SetFlashDumpSize(int size) => _flashDumpSize = size;
 
         public async Task RunTestAsync(
             string testId,
@@ -297,6 +338,24 @@ namespace SKAIChips_Verification_Tool.Chips
                     break;
                 case FW_DN_ITEMS.FLASH_WRITE:
                     await RunFlashWriteAsync(log, ct);
+                    break;
+                case FW_DN_ITEMS.FLASH_READ:
+                    await RunFlashReadAsync(log, ct);
+                    break;
+                case FW_DN_ITEMS.FLASH_VERIFY:
+                    await RunFlashVerifyAsync(log, ct);
+                    break;
+                case FW_DN_ITEMS.FIRM_ON_CLEAR:
+                    await RunFirmOnClearAsync(log, ct);
+                    break;
+                case FW_DN_ITEMS.RAM_WRITE:
+                    await RunRamWriteAsync(log, ct);
+                    break;
+                case FW_DN_ITEMS.RAM_READ:
+                    await RunRamReadAsync(log, ct);
+                    break;
+                case FW_DN_ITEMS.RESET:
+                    await RunResetAsync(log, ct);
                     break;
                 default:
                     await log("INFO", $"FW item '{item}' is not implemented yet.");
@@ -569,6 +628,15 @@ namespace SKAIChips_Verification_Tool.Chips
             if (!await CheckI2cIdAsync(log, ct))
                 return;
 
+            await log("INFO", "FLASH_WRITE: Start FLASH_ERASE before FLASH_WRITE.");
+            await RunFlashEraseAsync(log, ct);
+
+            if (!await CheckI2cIdAsync(log, ct))
+            {
+                await log("ERROR", "FLASH_WRITE: After erase, I2C ID check failed. Abort write.");
+                return;
+            }
+
             const int PageSize = 256;
             byte[] pageBuffer = new byte[PageSize];
 
@@ -620,20 +688,176 @@ namespace SKAIChips_Verification_Tool.Chips
             await log("INFO", "FLASH_WRITE completed successfully.");
         }
 
-        private async Task<bool> CheckI2cIdAsync(Func<string, string, Task> log, CancellationToken ct)
+        private async Task RunFlashReadAsync(Func<string, string, Task> log, CancellationToken ct)
         {
-            ct.ThrowIfCancellationRequested();
+            await log("INFO", "Start FLASH_READ (Dump NV memory).");
 
-            uint id = _chip.ReadRegister(0x5000_0000);
-            uint idPrefix = id >> 12;
+            if (!await CheckI2cIdAsync(log, ct))
+                return;
 
-            if (idPrefix != 0x02021)
+            int dumpSize = _flashDumpSize;
+            if (dumpSize <= 0)
             {
-                await log("ERROR", $"Invalid I2C IP ID: 0x{idPrefix:X5}");
+                if (!string.IsNullOrWhiteSpace(_firmwareFilePath) && File.Exists(_firmwareFilePath))
+                {
+                    dumpSize = (int)new FileInfo(_firmwareFilePath).Length;
+                }
+                else
+                {
+                    dumpSize = 256 * 1024;
+                    await log("INFO", $"Dump size is not set. Use default {dumpSize} bytes (256KB).");
+                }
+            }
+
+            const int PageSize = 4;
+            var firmwareData = new List<byte>(dumpSize);
+
+            for (uint addr = 0; addr < dumpSize; addr += PageSize)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                if ((addr % 0x1000) == 0)
+                    await log("INFO", $"Read Flash @ 0x{addr:X8}");
+
+                uint rcv = _chip.ReadRegister(addr);
+
+                firmwareData.Add((byte)(rcv & 0xFF));
+                firmwareData.Add((byte)((rcv >> 8) & 0xFF));
+                firmwareData.Add((byte)((rcv >> 16) & 0xFF));
+                firmwareData.Add((byte)((rcv >> 24) & 0xFF));
+            }
+
+            string time = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string fileName = $"ReadFW_NVM_{time}.bin";
+            try
+            {
+                File.WriteAllBytes(fileName, firmwareData.ToArray());
+            }
+            catch (Exception ex)
+            {
+                await log("ERROR", $"Failed to write dump file '{fileName}': {ex.Message}");
+                return;
+            }
+
+            await log("INFO", $"FLASH_READ completed. File = {fileName}, Size = {firmwareData.Count} bytes.");
+        }
+
+        private async Task RunFlashVerifyAsync(Func<string, string, Task> log, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(_firmwareFilePath) || !File.Exists(_firmwareFilePath))
+            {
+                await log("ERROR", "Firmware file path is not set or file does not exist. Cannot verify.");
+                return;
+            }
+
+            byte[] fwData;
+            try
+            {
+                fwData = File.ReadAllBytes(_firmwareFilePath);
+            }
+            catch (Exception ex)
+            {
+                await log("ERROR", $"Failed to read firmware file: {ex.Message}");
+                return;
+            }
+
+            if (fwData.Length == 0)
+            {
+                await log("ERROR", "Firmware file is empty. Cannot verify.");
+                return;
+            }
+
+            if (!await CheckI2cIdAsync(log, ct))
+                return;
+
+            await log("INFO", $"Start FLASH_VERIFY. Size = {fwData.Length} bytes");
+
+            const int PageSize = 256;
+            byte[] readBuffer = new byte[PageSize];
+
+            for (uint flashAddress = 0; flashAddress < fwData.Length; flashAddress += (uint)PageSize)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                if ((flashAddress % 0x1000) == 0)
+                    await log("INFO", $"Verify @ 0x{flashAddress:X8}");
+
+                for (uint i = 0; i < PageSize; i += 4)
+                {
+                    uint data = _chip.ReadRegister(flashAddress + i);
+                    for (int j = 0; j < 4; j++)
+                    {
+                        int idx = (int)i + j;
+                        if (idx < PageSize)
+                            readBuffer[idx] = (byte)((data >> (8 * j)) & 0xFF);
+                    }
+                }
+
+                for (int i = 0; i < PageSize; i++)
+                {
+                    int srcIndex = (int)flashAddress + i;
+                    byte expected = srcIndex < fwData.Length ? fwData[srcIndex] : (byte)0xFF;
+
+                    if (readBuffer[i] != expected)
+                    {
+                        uint errAddr = flashAddress + (uint)i;
+                        await log("ERROR",
+                            $"Verify failed @ 0x{errAddr:X8}: W=0x{expected:X2}, R=0x{readBuffer[i]:X2}");
+                        return;
+                    }
+                }
+            }
+
+            await log("INFO", "FLASH_VERIFY completed successfully.");
+        }
+
+        private async Task RunResetAsync(Func<string, string, Task> log, CancellationToken ct)
+        {
+            await log("INFO", "Reset Oasis (MCU reset).");
+
+            if (!await CheckI2cIdAsync(log, ct))
+                return;
+
+            _chip.ResetMcu();
+
+            await Task.Delay(100, ct);
+
+            await log("INFO", "Reset command has been sent.");
+        }
+
+        private async Task RunFirmOnClearAsync(Func<string, string, Task> log, CancellationToken ct)
+        {
+            await log("INFO", "FIRM_ON_CLEAR is not implemented in V4 yet.");
+            await Task.Delay(100, ct);
+        }
+
+        private async Task RunRamWriteAsync(Func<string, string, Task> log, CancellationToken ct)
+        {
+            await log("INFO", "RAM_WRITE is not implemented in V4 yet.");
+            await Task.Delay(100, ct);
+        }
+
+        private async Task RunRamReadAsync(Func<string, string, Task> log, CancellationToken ct)
+        {
+            await log("INFO", "RAM_READ is not implemented in V4 yet.");
+            await Task.Delay(100, ct);
+        }
+
+        private async Task<bool> CheckI2cIdAsync(
+            Func<string, string, Task> log,
+            CancellationToken ct)
+        {
+            // 단순히 동기 ReadRegister를 호출하고 결과만 검사한다.
+            uint id = _chip.ReadRegister(0x50000000);
+            uint ipId = id >> 12;
+
+            if (ipId != 0x02021)
+            {
+                await log("ERROR", $"Fail to Check I2C IP ID. R = 0x{ipId:X5}");
                 return false;
             }
 
-            await log("INFO", $"I2C IP ID OK: 0x{idPrefix:X5}");
+            await log("INFO", "CheckI2C_ID OK.");
             return true;
         }
 
