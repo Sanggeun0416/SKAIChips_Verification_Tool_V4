@@ -628,6 +628,15 @@ namespace SKAIChips_Verification_Tool.Chips
             if (!await CheckI2cIdAsync(log, ct))
                 return;
 
+            await log("INFO", "FLASH_WRITE: Start FLASH_ERASE before FLASH_WRITE.");
+            await RunFlashEraseAsync(log, ct);
+
+            if (!await CheckI2cIdAsync(log, ct))
+            {
+                await log("ERROR", "FLASH_WRITE: After erase, I2C ID check failed. Abort write.");
+                return;
+            }
+
             const int PageSize = 256;
             byte[] pageBuffer = new byte[PageSize];
 

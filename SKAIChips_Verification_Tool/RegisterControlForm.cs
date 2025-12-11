@@ -573,17 +573,24 @@ namespace SKAIChips_Verification_Tool
                 return;
             }
 
-            if (string.Equals(info.Category, "FW", StringComparison.OrdinalIgnoreCase)
-                && string.Equals(info.Id, "FW.FLASH_WRITE", StringComparison.OrdinalIgnoreCase))
+            if (info.Id == "FW.FLASH_WRITE")
             {
-                if (string.IsNullOrWhiteSpace(_firmwareFilePath))
+                using (var ofd = new OpenFileDialog())
                 {
-                    if (!SelectFirmwareFile())
-                        return;
-                }
+                    ofd.Filter = "FW File (*.bin;*.hex)|*.bin;*.hex|All files (*.*)|*.*";
+                    ofd.Title = "Select Firmware File";
 
-                if (_testSuite is Chips.OasisTestSuite oasisSuite)
-                    oasisSuite.SetFirmwareFilePath(_firmwareFilePath);
+                    if (ofd.ShowDialog(this) != DialogResult.OK)
+                    {
+                        MessageBox.Show("펌웨어 파일 선택이 취소되었습니다.");
+                        return;
+                    }
+
+                    if (_testSuite is SKAIChips_Verification_Tool.Chips.OasisTestSuite oasisSuite)
+                    {
+                        oasisSuite.SetFirmwareFilePath(ofd.FileName);
+                    }
+                }
             }
 
             _testCts = new CancellationTokenSource();
