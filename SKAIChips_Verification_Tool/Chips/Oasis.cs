@@ -368,6 +368,8 @@ namespace SKAIChips_Verification_Tool.Chips
             if (!await CheckI2cIdAsync(log, ct))
                 return;
 
+            _chip.HaltMcu();
+
             await log("INFO", "Start FLASH_ERASE (8 sectors of 64KB).");
 
             for (uint num = 0; num < 8; num++)
@@ -602,213 +604,240 @@ namespace SKAIChips_Verification_Tool.Chips
 
         private async Task RunFlashWriteAsync(Func<string, string, Task> log, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(_firmwareFilePath))
-            {
-                await log("ERROR", "Firmware file path is not set.");
-                return;
-            }
-
-            byte[] fwData;
             try
             {
-                fwData = File.ReadAllBytes(_firmwareFilePath);
-            }
-            catch (Exception ex)
-            {
-                await log("ERROR", $"Failed to read firmware file: {ex.Message}");
-                return;
-            }
-
-            if (fwData.Length == 0)
-            {
-                await log("ERROR", "Firmware file is empty.");
-                return;
-            }
-
-            if (!await CheckI2cIdAsync(log, ct))
-                return;
-
-            await log("INFO", "FLASH_WRITE: Start FLASH_ERASE before FLASH_WRITE.");
-            await RunFlashEraseAsync(log, ct);
-
-            if (!await CheckI2cIdAsync(log, ct))
-            {
-                await log("ERROR", "FLASH_WRITE: After erase, I2C ID check failed. Abort write.");
-                return;
-            }
-
-            const int PageSize = 256;
-            byte[] pageBuffer = new byte[PageSize];
-
-            for (uint flashAddress = 0; flashAddress < fwData.Length; flashAddress += (uint)PageSize)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                for (int i = 0; i < PageSize; i++)
+                if (string.IsNullOrWhiteSpace(_firmwareFilePath))
                 {
-                    int srcIndex = (int)flashAddress + i;
-                    pageBuffer[i] = srcIndex < fwData.Length ? fwData[srcIndex] : (byte)0xFF;
-                }
-
-                await log("INFO", $"Write page @ 0x{flashAddress:X8}");
-
-                if (!await WriteMemoryNvmAsync(flashAddress, pageBuffer, log, ct))
+                    await log("ERROR", "Firmware file path is not set.");
                     return;
-            }
-
-            await log("INFO", "Verify written data");
-
-            byte[] readBuffer = new byte[PageSize];
-            for (uint flashAddress = 0; flashAddress < fwData.Length; flashAddress += (uint)PageSize)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                for (uint i = 0; i < PageSize; i += 4)
-                {
-                    uint data = _chip.ReadRegister(flashAddress + i);
-                    for (int j = 0; j < 4; j++)
-                    {
-                        int idx = (int)i + j;
-                        if (idx < PageSize)
-                            readBuffer[idx] = (byte)((data >> (8 * j)) & 0xFF);
-                    }
                 }
 
-                for (int i = 0; i < PageSize; i++)
+                byte[] fwData;
+                try
                 {
-                    byte expected = ((int)flashAddress + i < fwData.Length) ? fwData[(int)flashAddress + i] : (byte)0xFF;
-                    if (readBuffer[i] != expected)
+                    fwData = File.ReadAllBytes(_firmwareFilePath);
+                }
+                catch (Exception ex)
+                {
+                    await log("ERROR", $"Failed to read firmware file: {ex.Message}");
+                    return;
+                }
+
+                if (fwData.Length == 0)
+                {
+                    await log("ERROR", "Firmware file is empty.");
+                    return;
+                }
+
+                if (!await CheckI2cIdAsync(log, ct))
+                    return;
+
+                _chip.HaltMcu();
+
+                await log("INFO", "FLASH_WRITE: Start FLASH_ERASE before FLASH_WRITE.");
+                await RunFlashEraseAsync(log, ct);
+
+                if (!await CheckI2cIdAsync(log, ct))
+                {
+                    await log("ERROR", "FLASH_WRITE: After erase, I2C ID check failed. Abort write.");
+                    return;
+                }
+
+                const int PageSize = 256;
+                byte[] pageBuffer = new byte[PageSize];
+
+                for (uint flashAddress = 0; flashAddress < fwData.Length; flashAddress += (uint)PageSize)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    for (int i = 0; i < PageSize; i++)
                     {
-                        await log("ERROR", $"Verify failed @ 0x{flashAddress + (uint)i:X8}: W=0x{expected:X2}, R=0x{readBuffer[i]:X2}");
+                        int srcIndex = (int)flashAddress + i;
+                        pageBuffer[i] = srcIndex < fwData.Length ? fwData[srcIndex] : (byte)0xFF;
+                    }
+
+                    await log("INFO", $"Write page @ 0x{flashAddress:X8}");
+
+                    if (!await WriteMemoryNvmAsync(flashAddress, pageBuffer, log, ct))
                         return;
+                }
+
+                await log("INFO", "Verify written data");
+
+                byte[] readBuffer = new byte[PageSize];
+                for (uint flashAddress = 0; flashAddress < fwData.Length; flashAddress += (uint)PageSize)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    for (uint i = 0; i < PageSize; i += 4)
+                    {
+                        uint data = _chip.ReadRegister(flashAddress + i);
+                        for (int j = 0; j < 4; j++)
+                        {
+                            int idx = (int)i + j;
+                            if (idx < PageSize)
+                                readBuffer[idx] = (byte)((data >> (8 * j)) & 0xFF);
+                        }
+                    }
+
+                    for (int i = 0; i < PageSize; i++)
+                    {
+                        byte expected = ((int)flashAddress + i < fwData.Length) ? fwData[(int)flashAddress + i] : (byte)0xFF;
+                        if (readBuffer[i] != expected)
+                        {
+                            await log("ERROR", $"Verify failed @ 0x{flashAddress + (uint)i:X8}: W=0x{expected:X2}, R=0x{readBuffer[i]:X2}");
+                            return;
+                        }
                     }
                 }
-            }
 
-            await log("INFO", "FLASH_WRITE completed successfully.");
+                await log("INFO", "FLASH_WRITE completed successfully.");
+            }
+            finally
+            {
+                _chip.ResetMcu();
+            }
         }
 
         private async Task RunFlashReadAsync(Func<string, string, Task> log, CancellationToken ct)
         {
-            await log("INFO", "Start FLASH_READ (Dump NV memory).");
-
-            if (!await CheckI2cIdAsync(log, ct))
-                return;
-
-            int dumpSize = _flashDumpSize;
-            if (dumpSize <= 0)
-            {
-                if (!string.IsNullOrWhiteSpace(_firmwareFilePath) && File.Exists(_firmwareFilePath))
-                {
-                    dumpSize = (int)new FileInfo(_firmwareFilePath).Length;
-                }
-                else
-                {
-                    dumpSize = 256 * 1024;
-                    await log("INFO", $"Dump size is not set. Use default {dumpSize} bytes (256KB).");
-                }
-            }
-
-            const int PageSize = 4;
-            var firmwareData = new List<byte>(dumpSize);
-
-            for (uint addr = 0; addr < dumpSize; addr += PageSize)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                if ((addr % 0x1000) == 0)
-                    await log("INFO", $"Read Flash @ 0x{addr:X8}");
-
-                uint rcv = _chip.ReadRegister(addr);
-
-                firmwareData.Add((byte)(rcv & 0xFF));
-                firmwareData.Add((byte)((rcv >> 8) & 0xFF));
-                firmwareData.Add((byte)((rcv >> 16) & 0xFF));
-                firmwareData.Add((byte)((rcv >> 24) & 0xFF));
-            }
-
-            string time = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            string fileName = $"ReadFW_NVM_{time}.bin";
             try
             {
-                File.WriteAllBytes(fileName, firmwareData.ToArray());
-            }
-            catch (Exception ex)
-            {
-                await log("ERROR", $"Failed to write dump file '{fileName}': {ex.Message}");
-                return;
-            }
+                await log("INFO", "Start FLASH_READ (Dump NV memory).");
 
-            await log("INFO", $"FLASH_READ completed. File = {fileName}, Size = {firmwareData.Count} bytes.");
+                if (!await CheckI2cIdAsync(log, ct))
+                    return;
+
+                _chip.HaltMcu();
+
+                int dumpSize = _flashDumpSize;
+                if (dumpSize <= 0)
+                {
+                    if (!string.IsNullOrWhiteSpace(_firmwareFilePath) && File.Exists(_firmwareFilePath))
+                    {
+                        dumpSize = (int)new FileInfo(_firmwareFilePath).Length;
+                    }
+                    else
+                    {
+                        dumpSize = 256 * 1024;
+                        await log("INFO", $"Dump size is not set. Use default {dumpSize} bytes (256KB).");
+                    }
+                }
+
+                const int PageSize = 4;
+                var firmwareData = new List<byte>(dumpSize);
+
+                for (uint addr = 0; addr < dumpSize; addr += PageSize)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    if ((addr % 0x1000) == 0)
+                        await log("INFO", $"Read Flash @ 0x{addr:X8}");
+
+                    uint rcv = _chip.ReadRegister(addr);
+
+                    firmwareData.Add((byte)(rcv & 0xFF));
+                    firmwareData.Add((byte)((rcv >> 8) & 0xFF));
+                    firmwareData.Add((byte)((rcv >> 16) & 0xFF));
+                    firmwareData.Add((byte)((rcv >> 24) & 0xFF));
+                }
+
+                string time = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string fileName = $"ReadFW_NVM_{time}.bin";
+                try
+                {
+                    File.WriteAllBytes(fileName, firmwareData.ToArray());
+                }
+                catch (Exception ex)
+                {
+                    await log("ERROR", $"Failed to write dump file '{fileName}': {ex.Message}");
+                    return;
+                }
+
+                await log("INFO", $"FLASH_READ completed. File = {fileName}, Size = {firmwareData.Count} bytes.");
+            }
+            finally
+            {
+                _chip.ResetMcu();
+            }
         }
 
         private async Task RunFlashVerifyAsync(Func<string, string, Task> log, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(_firmwareFilePath) || !File.Exists(_firmwareFilePath))
-            {
-                await log("ERROR", "Firmware file path is not set or file does not exist. Cannot verify.");
-                return;
-            }
-
-            byte[] fwData;
             try
             {
-                fwData = File.ReadAllBytes(_firmwareFilePath);
-            }
-            catch (Exception ex)
-            {
-                await log("ERROR", $"Failed to read firmware file: {ex.Message}");
-                return;
-            }
-
-            if (fwData.Length == 0)
-            {
-                await log("ERROR", "Firmware file is empty. Cannot verify.");
-                return;
-            }
-
-            if (!await CheckI2cIdAsync(log, ct))
-                return;
-
-            await log("INFO", $"Start FLASH_VERIFY. Size = {fwData.Length} bytes");
-
-            const int PageSize = 256;
-            byte[] readBuffer = new byte[PageSize];
-
-            for (uint flashAddress = 0; flashAddress < fwData.Length; flashAddress += (uint)PageSize)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                if ((flashAddress % 0x1000) == 0)
-                    await log("INFO", $"Verify @ 0x{flashAddress:X8}");
-
-                for (uint i = 0; i < PageSize; i += 4)
+                if (string.IsNullOrWhiteSpace(_firmwareFilePath) || !File.Exists(_firmwareFilePath))
                 {
-                    uint data = _chip.ReadRegister(flashAddress + i);
-                    for (int j = 0; j < 4; j++)
+                    await log("ERROR", "Firmware file path is not set or file does not exist. Cannot verify.");
+                    return;
+                }
+
+                byte[] fwData;
+                try
+                {
+                    fwData = File.ReadAllBytes(_firmwareFilePath);
+                }
+                catch (Exception ex)
+                {
+                    await log("ERROR", $"Failed to read firmware file: {ex.Message}");
+                    return;
+                }
+
+                if (fwData.Length == 0)
+                {
+                    await log("ERROR", "Firmware file is empty. Cannot verify.");
+                    return;
+                }
+
+                if (!await CheckI2cIdAsync(log, ct))
+                    return;
+
+                _chip.HaltMcu();
+
+                await log("INFO", $"Start FLASH_VERIFY. Size = {fwData.Length} bytes");
+
+                const int PageSize = 256;
+                byte[] readBuffer = new byte[PageSize];
+
+                for (uint flashAddress = 0; flashAddress < fwData.Length; flashAddress += (uint)PageSize)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    if ((flashAddress % 0x1000) == 0)
+                        await log("INFO", $"Verify @ 0x{flashAddress:X8}");
+
+                    for (uint i = 0; i < PageSize; i += 4)
                     {
-                        int idx = (int)i + j;
-                        if (idx < PageSize)
-                            readBuffer[idx] = (byte)((data >> (8 * j)) & 0xFF);
+                        uint data = _chip.ReadRegister(flashAddress + i);
+                        for (int j = 0; j < 4; j++)
+                        {
+                            int idx = (int)i + j;
+                            if (idx < PageSize)
+                                readBuffer[idx] = (byte)((data >> (8 * j)) & 0xFF);
+                        }
+                    }
+
+                    for (int i = 0; i < PageSize; i++)
+                    {
+                        int srcIndex = (int)flashAddress + i;
+                        byte expected = srcIndex < fwData.Length ? fwData[srcIndex] : (byte)0xFF;
+
+                        if (readBuffer[i] != expected)
+                        {
+                            uint errAddr = flashAddress + (uint)i;
+                            await log("ERROR",
+                                $"Verify failed @ 0x{errAddr:X8}: W=0x{expected:X2}, R=0x{readBuffer[i]:X2}");
+                            return;
+                        }
                     }
                 }
 
-                for (int i = 0; i < PageSize; i++)
-                {
-                    int srcIndex = (int)flashAddress + i;
-                    byte expected = srcIndex < fwData.Length ? fwData[srcIndex] : (byte)0xFF;
-
-                    if (readBuffer[i] != expected)
-                    {
-                        uint errAddr = flashAddress + (uint)i;
-                        await log("ERROR",
-                            $"Verify failed @ 0x{errAddr:X8}: W=0x{expected:X2}, R=0x{readBuffer[i]:X2}");
-                        return;
-                    }
-                }
+                await log("INFO", "FLASH_VERIFY completed successfully.");
             }
-
-            await log("INFO", "FLASH_VERIFY completed successfully.");
+            finally
+            {
+                _chip.ResetMcu();
+            }
         }
 
         private async Task RunResetAsync(Func<string, string, Task> log, CancellationToken ct)
@@ -867,7 +896,16 @@ namespace SKAIChips_Verification_Tool.Chips
             {
                 ct.ThrowIfCancellationRequested();
 
-                uint status = _chip.ReadRegister(0x5009_0020);
+                uint status;
+                try
+                {
+                    status = _chip.ReadRegister(0x5009_0020);
+                }
+                catch (Exception ex)
+                {
+                    await log("ERROR", $"WaitFlashReady: ReadRegister(0x50090020) failed: {ex.Message}");
+                    return false;
+                }
                 uint busy = status & 0x01u;
 
                 if (busy == 0)
