@@ -68,6 +68,20 @@ namespace SKAIChips_Verification_Tool.Chips
             _bus.WriteBytes(dataBytes);
         }
 
+        internal void HaltMcu()
+        {
+            var cmd = new byte[] { 0xA1, 0x2C, 0x56, 0x78 };
+            _bus.WriteBytes(cmd);
+            Thread.Sleep(50); // wait for system reset
+        }
+
+        internal void ResetMcu()
+        {
+            var cmd = new byte[] { 0xA1, 0x2C, 0xAB, 0xCD };
+            _bus.WriteBytes(cmd);
+            Thread.Sleep(50); // wait for system reset
+        }
+
         private static byte[] BuildAddressCommand(uint address)
         {
             var cmd = new byte[8];
@@ -102,12 +116,6 @@ namespace SKAIChips_Verification_Tool.Chips
         private readonly OasisRegisterChip _chip;
         private string _firmwareFilePath = string.Empty;
 
-        private enum FLASH_CMD : byte
-        {
-            PP = 0x02,
-            BE64 = 0xD8,
-        }
-
         private enum TEST_ITEMS
         {
             GPIO_DISABLE,
@@ -141,6 +149,36 @@ namespace SKAIChips_Verification_Tool.Chips
         {
             TEST_ITEM,
             NUM_TEST_ITEMS,
+        }
+
+        private enum FLASH_CMD : byte
+        {
+            WRSR = 0x01,    // write status reg
+            PP = 0x02,      // page program
+            RDCMD = 0x03,   // read data
+            WRDI = 0x04,    // write disable
+            RDSR = 0x05,    // read status reg
+            WREN = 0x06,    // write enable
+            F_RD = 0x0B,    // fast read
+            SE = 0x20,      // 4KB sector erase
+            BE32 = 0x52,    // 32KB block erase
+            RSTEN = 0x66,   // reset enable
+            REMS = 0x90,    // read manufacture
+            RST = 0x99,     // reset
+            RDID = 0x9F,    // read identification
+            RES = 0xAB,     // read signature
+            ENSO = 0xB1,    // enter secured OTP
+            DP = 0xB9,      // deep power down
+            EXSO = 0xC1,    // exit secured OTP
+            CE = 0xC7,      // chip(bulk) erase
+            BE64 = 0xD8,    // 64KB sector erase
+        }
+
+        private enum FW_TARGET
+        {
+            NV_MEM = 0,
+            RAM = 1,
+            SPI,
         }
 
         public IReadOnlyList<ChipTestInfo> Tests { get; }
@@ -620,20 +658,21 @@ namespace SKAIChips_Verification_Tool.Chips
             await log("INFO", "FLASH_WRITE completed successfully.");
         }
 
-        private async Task<bool> CheckI2cIdAsync(Func<string, string, Task> log, CancellationToken ct)
+        private async Task<bool> CheckI2cIdAsync(
+            Func<string, string, Task> log,
+            CancellationToken ct)
         {
-            ct.ThrowIfCancellationRequested();
+            // 단순히 동기 ReadRegister를 호출하고 결과만 검사한다.
+            uint id = _chip.ReadRegister(0x50000000);
+            uint ipId = id >> 12;
 
-            uint id = _chip.ReadRegister(0x5000_0000);
-            uint idPrefix = id >> 12;
-
-            if (idPrefix != 0x02021)
+            if (ipId != 0x02021)
             {
-                await log("ERROR", $"Invalid I2C IP ID: 0x{idPrefix:X5}");
+                await log("ERROR", $"Fail to Check I2C IP ID. R = 0x{ipId:X5}");
                 return false;
             }
 
-            await log("INFO", $"I2C IP ID OK: 0x{idPrefix:X5}");
+            await log("INFO", "CheckI2C_ID OK.");
             return true;
         }
 
